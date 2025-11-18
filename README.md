@@ -55,7 +55,7 @@ tauon
 Then open:
 
 * [http://127.0.0.1:8000](http://127.0.0.1:8000)
-* or **Ctrl+click** the `* Running on http://127.0.0.1:8000` line in your terminal
+* or **Ctrl+click** the address in the `* Running on http://127.0.0.1:8000` line in your terminal
 
 ---
 
