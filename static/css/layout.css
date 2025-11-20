@@ -14,8 +14,6 @@
   --radius-md: 14px;
   --radius-sm: 9px;
   --sidebar-width: 320px;   /* default expanded width */
-  /* content zoom (1 = 100%) */
-  --content-scale: 1;
 }
 
 * {
@@ -288,7 +286,8 @@ body.sidebar-collapsed .sidebar-toggle {
   border: 1px solid rgba(148,163,184,0.35);
   background: linear-gradient(145deg, rgba(15,23,42,0.98), rgba(17,24,39,0.98));
   min-width: 0;
-  font-size: calc(0.98rem * var(--content-scale));
+  /* Content scales with browser zoom */
+  font-size: 0.98rem;
 }
 
 .main-header {
@@ -395,39 +394,7 @@ body.sidebar-collapsed .sidebar-toggle {
 }
 
 .zoom-controls {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.2rem 0.45rem;
-  border-radius: 999px;
-  background: rgba(15,23,42,0.95);
-  border: 1px solid rgba(55,65,81,0.9);
-  font-size: 0.78rem;
-}
-
-.zoom-btn {
-  border: none;
-  border-radius: 999px;
-  width: 1.6rem;
-  height: 1.4rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  background: #020617;
-  color: #e5e7eb;
-  font-size: 1.1rem;
-  padding: 0;
-}
-
-.zoom-btn:hover {
-  background: #111827;
-}
-
-.zoom-label {
-  min-width: 2.2rem;
-  text-align: center;
-  color: var(--text-muted);
+  display: none; /* Hidden - use browser zoom (Ctrl+/-) instead */
 }
 
 .main-hint {

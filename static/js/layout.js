@@ -1,105 +1,188 @@
 document.addEventListener("DOMContentLoaded", function () {
-  // Sidebar expand/collapse toggle
-  var btn = document.getElementById("sidebar-toggle");
-  if (btn) {
-    function updateIcon() {
-      var collapsed = document.body.classList.contains("sidebar-collapsed");
-      btn.textContent = collapsed ? "◀" : "▶";
-    }
-    btn.addEventListener("click", function () {
-        var collapsed = document.body.classList.contains("sidebar-collapsed");
+  const body = document.body;
+  const root = document.documentElement;
 
-        if (!collapsed) {
-        // going to collapsed: remember current width
-        if (sidebarEl) {
-            var styles = window.getComputedStyle(sidebarEl);
-            var w = parseInt(styles.width, 10);
-            if (!isNaN(w)) savedSidebarWidth = w;
-        }
-        document.body.classList.add("sidebar-collapsed");
-        } else {
-        // going back to expanded: restore width
-        document.body.classList.remove("sidebar-collapsed");
-        document.documentElement.style.setProperty("--sidebar-width", savedSidebarWidth + "px");
-        }
-        updateIcon();
+  // =========================
+  // ZOOM SYSTEM (IN-PAGE)
+  // =========================
+  const ZOOM_KEY = "tauon_zoom_level";
+  const BASE_FONT_SIZE = 16;      // match body font-size in CSS
+  const MIN_ZOOM = 0.7;
+  const MAX_ZOOM = 1.8;
+  const STEP = 0.1;
+
+  let zoomLevel = 1.0;
+
+  const zoomLabel = document.querySelector(".zoom-label");
+  const zoomButtons = document.querySelectorAll(".zoom-btn");
+
+  function clampZoom(z) {
+    return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
+  }
+
+  function loadZoom() {
+    const stored = localStorage.getItem(ZOOM_KEY);
+    if (!stored) return;
+    const parsed = parseFloat(stored);
+    if (!isNaN(parsed)) {
+      zoomLevel = clampZoom(parsed);
+    }
+  }
+
+  function saveZoom() {
+    localStorage.setItem(ZOOM_KEY, String(zoomLevel));
+  }
+
+  function applyZoom() {
+    const size = (BASE_FONT_SIZE * zoomLevel).toFixed(2) + "px";
+    body.style.fontSize = size;
+    if (zoomLabel) {
+      zoomLabel.textContent = Math.round(zoomLevel * 100) + "%";
+    }
+  }
+
+  function changeZoom(delta) {
+    zoomLevel = clampZoom(zoomLevel + delta);
+    applyZoom();
+    saveZoom();
+  }
+
+  function resetZoom() {
+    zoomLevel = 1.0;
+    applyZoom();
+    saveZoom();
+  }
+
+  // Hook up ± buttons in header
+  zoomButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const dir = btn.dataset.dir;
+      if (dir === "+") {
+        changeZoom(STEP);
+      } else if (dir === "-") {
+        changeZoom(-STEP);
+      }
     });
+  });
+
+  // Intercept Ctrl/⌘ +, -, 0 to use our zoom
+  window.addEventListener("keydown", (e) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+
+    const key = e.key;
+
+    if (key === "+" || key === "=") {
+      e.preventDefault();
+      changeZoom(STEP);
+    } else if (key === "-" || key === "_") {
+      e.preventDefault();
+      changeZoom(-STEP);
+    } else if (key === "0") {
+      e.preventDefault();
+      resetZoom();
+    }
+  });
+
+  // Intercept Ctrl + wheel to zoom in-page (where supported)
+  window.addEventListener("wheel", (e) => {
+    if (!e.ctrlKey) return;
+    // Try to prevent browser zoom / pinch-zoom
+    e.preventDefault();
+
+    if (e.deltaY < 0) {
+      // scrolling up -> zoom in
+      changeZoom(STEP);
+    } else if (e.deltaY > 0) {
+      // scrolling down -> zoom out
+      changeZoom(-STEP);
+    }
+  }, { passive: false });
+
+  // Init zoom
+  loadZoom();
+  applyZoom();
+
+  // =========================
+  // SIDEBAR TOGGLE
+  // =========================
+  const btn = document.getElementById("sidebar-toggle");
+  const sidebarEl = document.querySelector(".sidebar");
+  let savedSidebarWidth = null;
+
+  function updateIcon() {
+    const collapsed = body.classList.contains("sidebar-collapsed");
+    btn.textContent = collapsed ? "◀" : "▶";
+  }
+
+  if (btn && sidebarEl) {
+    btn.addEventListener("click", function () {
+      const collapsed = body.classList.contains("sidebar-collapsed");
+
+      if (!collapsed) {
+        // going to collapsed: remember current width
+        const rect = sidebarEl.getBoundingClientRect();
+        savedSidebarWidth = rect.width;
+        body.classList.add("sidebar-collapsed");
+      } else {
+        // going to expanded: restore width if known
+        body.classList.remove("sidebar-collapsed");
+        if (savedSidebarWidth != null) {
+          root.style.setProperty("--sidebar-width", savedSidebarWidth + "px");
+        } else {
+          root.style.removeProperty("--sidebar-width");
+        }
+      }
+
+      updateIcon();
+    });
+
     updateIcon();
   }
 
-  // Folder expand/collapse behavior
-  document.addEventListener("click", function (e) {
-    var row = e.target.closest(".folder-row");
-    if (!row) return;
-    var container = row.closest(".folder");
-    if (!container) return;
-    container.classList.toggle("collapsed");
-    var toggleIcon = row.querySelector(".toggle-arrow");
-    if (toggleIcon) {
-      toggleIcon.textContent = container.classList.contains("collapsed") ? "▶" : "▼";
-    }
-  });
-  // Resizable sidebar via divider drag
-  var divider = document.getElementById("divider");
-  var isResizing = false;
-  var startX, startWidth;
-  var minWidth = 220;
-  var maxWidth = 520;
-  var savedSidebarWidth = 320;
-
-  var sidebarEl = document.querySelector(".sidebar");
+  // =========================
+  // RESIZABLE SIDEBAR (DIVIDER DRAG)
+  // =========================
+  const divider = document.getElementById("divider");
+  let isResizing = false;
+  let startX, startWidth;
 
   if (divider && sidebarEl) {
+    const MIN_SIDEBAR = 180;
+    const MAX_SIDEBAR = 500;
+
     divider.addEventListener("mousedown", function (e) {
-      // don't resize when collapsed
-      if (document.body.classList.contains("sidebar-collapsed")) return;
+      // If collapsed, uncollapse first so dragging feels sane
+      if (body.classList.contains("sidebar-collapsed")) {
+        body.classList.remove("sidebar-collapsed");
+        if (savedSidebarWidth != null) {
+          root.style.setProperty("--sidebar-width", savedSidebarWidth + "px");
+        }
+        if (btn) updateIcon();
+      }
 
       isResizing = true;
       startX = e.clientX;
-      var styles = window.getComputedStyle(sidebarEl);
-      startWidth = parseInt(styles.width, 10) || 320;
-      document.body.classList.add("resizing");
+      startWidth = sidebarEl.getBoundingClientRect().width;
+      body.classList.add("resizing");
       e.preventDefault();
     });
 
     window.addEventListener("mousemove", function (e) {
       if (!isResizing) return;
-      var dx = e.clientX - startX;
-      var newWidth = Math.min(maxWidth, Math.max(minWidth, startWidth + dx));
+      const dx = e.clientX - startX;
+      let newWidth = startWidth + dx;
+
+      if (newWidth < MIN_SIDEBAR) newWidth = MIN_SIDEBAR;
+      if (newWidth > MAX_SIDEBAR) newWidth = MAX_SIDEBAR;
+
       savedSidebarWidth = newWidth;
-      document.documentElement.style.setProperty("--sidebar-width", newWidth + "px");
+      root.style.setProperty("--sidebar-width", newWidth + "px");
     });
 
     window.addEventListener("mouseup", function () {
       if (!isResizing) return;
       isResizing = false;
-      document.body.classList.remove("resizing");
+      body.classList.remove("resizing");
     });
   }
-
-  // Content zoom controls
-  var zoomBtns = document.querySelectorAll(".zoom-btn");
-  var zoomLabel = document.querySelector(".zoom-label");
-  var scale = 1.0;
-  var minScale = 0.8;
-  var maxScale = 1.6;
-  function applyScale() {
-    document.documentElement.style.setProperty("--content-scale", scale.toString());
-    if (zoomLabel) {
-      zoomLabel.textContent = Math.round(scale * 100) + "%";
-    }
-  }
-  zoomBtns.forEach(function (b) {
-    b.addEventListener("click", function () {
-      var dir = b.getAttribute("data-dir");
-      if (dir === "+") {
-        scale = Math.min(maxScale, scale + 0.1);
-      } else if (dir === "-") {
-        scale = Math.max(minScale, scale - 0.1);
-      }
-      applyScale();
-    });
-  });
-  applyScale();
 });
-
