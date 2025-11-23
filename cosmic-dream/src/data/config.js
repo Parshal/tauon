@@ -35,7 +35,7 @@ export const PARAMS = [
   { key: 'starFastSoft',    label: 'FastSft',   min: 0.0, max: 1.0,   step: 0.01, default: 0.32 },
   { key: 'starFastGlow',    label: 'FastGlw',   min: 0.0, max: 2.0,   step: 0.01, default: 0.28 },
   { key: 'starFastGlowRad', label: 'FastRad',   min: 0.0, max: 1.2,   step: 0.001,default: 0.85 },
-  { key: 'starFastBright',  label: 'FastExp',   min: 0.0, max: 5.0,   step: 0.05, default: 1.0 },
+  { key: 'starFastBright',  label: 'FastExp',   min: 0.0, max: 2.0,   step: 0.05, default: 1.0 },
 
   // Star + nebula blend mode selector (0-3)
   { key: 'starBlend',   label: 'Blend',   min: 0,   max: 3,    step: 1,    default: 0 },

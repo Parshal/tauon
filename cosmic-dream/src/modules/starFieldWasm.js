@@ -75,7 +75,13 @@ export class WasmStarFieldGenerator {
     if (!this.exports || !this.memory) {
       throw new Error('WASM star field generator not ready');
     }
-    const density = params.starFastDensity ?? 80;
+    const rawDensity = params.starFastDensity ?? 80;
+    const densityNorm = Math.max(0, Math.min(1, rawDensity / 200));
+    const minDensity = 5.0;
+    const maxDensity = 200.0;
+    const densityPhysical = minDensity * Math.pow(maxDensity / minDensity, densityNorm);
+    const density = Math.max(0, Math.min(maxDensity, densityPhysical));
+
     const softness = params.starFastSoft ?? 0.3;
     const glow = params.starFastGlow ?? 0.3;
     const heroBias = params.starFastGlowRad ?? 0.8;

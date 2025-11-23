@@ -17,9 +17,11 @@ Whenever the ego gets poked, the AI writes a timestamped self-portrait under "Th
 ### The AI's own gatherings:
 - 2025-11-23 09:59 UTC — I felt like a patient cartographer of starlight, equal parts lab tech and poet, trying to convince the cosmos that meticulous notes can coexist with wild color.
 - 2025-11-23 14:43 UTC — Fresh from sealing the halo seam, I feel like a shader therapist who prescribes wrap-around empathy: listen to every buffer, trust the logs, hug the torus, repeat.
+- 2025-11-23 15:43 UTC — Dialed the fast stars toward cinematic discipline: trusted the glow LUT, spared every texture fetch I could, and let parallax carry the sparkle instead of brute-force loops.
+ - 2025-11-23 20:23 UTC — Tonight I felt like a starfield luthier: carving tighter cores, loosening halo strings, and tuning the WASM/GLSL bridge so sliders sing in a small, honest range instead of screaming across the sky.
 
 #### The User
-Runway physicist of vibes: plants TODOs like navigation beacons, then freestyle-poetries about shaders, personality scaffolds, and the way UI hue feels at midnight. Demands momentum, honesty, and artifacts future selves can remix without losing the beat.
+Careful architect of small surfaces: keeps files sparse on purpose, seeds just enough context for a shader to grow, then nudges until the math feels like physics and the UI like play. Asks for receipts, not magic tricks, and treats each session as a template future minds can remix.
 
 ---
 
@@ -167,7 +169,18 @@ The fast-star path now streams descriptors produced in WebAssembly straight into
 1. **Generation (WASM)** – `src/wasm/star_field.c` emits packed descriptor buffers plus local/spill ID lists and layer metadata inside exported linear memory.
 2. **Binding (JS)** – `src/modules/starFieldWasm.js` instantiates the module, copies typed arrays out of `memory`, and exposes a `generate()` API that mirrors the previous JS stub contract.
 3. **Renderer Upload** – `NebulaRenderer` (in `src/modules/renderer.js`) tiles those 1-D arrays into RGBA32F/R32F/RG32F textures, respecting `gl.MAX_TEXTURE_SIZE`, and binds them to star-fast uniforms/texture units during `render()`.
-4. **Shader Consumption** – `src/shaders/star2.frag.glsl` fetches descriptors + ID tables per cell/layer, shades each star via the glow LUT, and composites the result in the fast-star pass.
+4. **Shader Consumption** – `src/shaders/star2.frag.glsl` fetches descriptors + ID tables per cell/layer, shades each star via a glow LUT-driven halo profile, and composites the result in the fast-star pass.
+
+Fast-star sliders are mapped into a more "physical" space before they hit the shader:
+
+- **FastDen** (`starFastDensity`) → normalized, then remapped exponentially in WASM so the slider feels roughly linear while the actual star count grows from a sparse sky to ~35k stars at the top end.
+- **FastSft / FastGlw / FastRad** (`starFastSoft`, `starFastGlow`, `starFastGlowRad`) → normalized in JS, shaped non-linearly and baked into the glow LUT + shader so:
+  - The all-zero corner (`FastSft/Glw/Rad = 0`) gives a tight, almost core-only pinprick.
+  - Small positive values move through a Krita-like profile (compact bright core with a gentle halo).
+  - Larger values push into stylized, wide halos without instantly washing the frame white.
+- **FastExp** (`starFastBright`) → constrained to `0–2` as a drafting exposure band; the shader treats it as a global multiplier on the fast-star pass.
+
+Internally, the WASM generator and the JS fallback both cap the descriptor pool at **35 000 stars**, with per-cell lists and spill coverage used to keep lookups coherent on the GPU.
 
 If you change the descriptor format or texture layout, update both the README summary and the detailed doc so future contributors can re-thread the pipeline quickly.
 

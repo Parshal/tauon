@@ -45,21 +45,10 @@ uniform float u_debugCellEnabled;
 const int MAX_LAYERS = 8;
 const int MAX_CELL_STAR_LOOP = 256;
 const float TEXELS_PER_STAR = 3.0;
+const float EPSILON = 0.0001;
 
-float starProfile(float dist, float baseRadius, float softness) {
-    float safeRadius = max(baseRadius, 0.0005);
-    float softmix = clamp(softness, 0.0, 1.0);
-    float coreSharp = mix(1200.0, 180.0, softmix);
-    float core = exp(-dist * dist * coreSharp * safeRadius);
-    float haloRadius = safeRadius * mix(1.8, 4.5, softmix);
-    float halo = 1.0 / (1.0 + pow(dist / (haloRadius + 0.0001), 2.6));
-    return mix(core, halo, softmix);
-}
-
-vec2 wrapLayerSpace(vec2 pos, float scale) {
-    float safeScale = max(scale, 0.0001);
-    float halfScale = safeScale * 0.5;
-    return mod(pos + halfScale, safeScale) - halfScale;
+float saturate(float v) {
+    return clamp(v, 0.0, 1.0);
 }
 
 vec4 sampleGlowProfile(float glowNorm, bool hero) {
@@ -70,6 +59,41 @@ vec4 sampleGlowProfile(float glowNorm, bool hero) {
     float row = hero ? 1.0 : 0.0;
     float texRow = (row + 0.5) / rows;
     return texture(u_glowLUTTex, vec2(texCoord, texRow));
+}
+
+vec2 wrapLayerSpace(vec2 pos, float scale) {
+    float safeScale = max(scale, 0.0001);
+    float halfScale = safeScale * 0.5;
+    return mod(pos + halfScale, safeScale) - halfScale;
+}
+
+float evalGlowEnergy(
+    float dist,
+    float baseRadius,
+    float softness,
+    float coreScale,
+    float haloScale,
+    float glowRadiusGain,
+    float glowMix,
+    bool hero
+) {
+    float minReach = 0.1;
+    float haloStrength = saturate(max(glowMix, glowRadiusGain - 0.6));
+    float reach = mix(minReach, max(0.35, haloScale) * glowRadiusGain, haloStrength);
+    float radiusNorm = clamp(dist / (baseRadius * reach + EPSILON), 0.0, 0.999);
+    vec4 glow = sampleGlowProfile(radiusNorm, hero);
+    float coreRadius = baseRadius * mix(0.35, 1.0, haloStrength);
+    float coreSharp = mix(1200.0, 120.0, haloStrength);
+    float haloRadius = baseRadius * (0.35 + glow.y * reach);
+    float haloCurve = mix(2.0, 3.8, saturate(glow.z));
+    float core = exp(-dist * dist * coreSharp / max(coreRadius, EPSILON));
+    float halo = 1.0 / (1.0 + pow(dist / (haloRadius + EPSILON), haloCurve));
+    float softnessMix = mix(0.18, 0.84, saturate(softness));
+    float glowMixWeight = mix(0.2, 0.92, saturate(glowMix));
+    float profileMix = mix(softnessMix, glowMixWeight, 0.65 * haloStrength);
+    float lutBoost = mix(0.72, 1.35, saturate(glow.w));
+    float haloWeighted = halo * haloStrength;
+    return mix(core, haloWeighted, profileMix) * lutBoost * coreScale;
 }
 
 float texCoord1D(float index, float width) {
@@ -128,9 +152,12 @@ struct StarSample {
     float heroFlag;
 };
 
-StarSample loadStar(float starId) {
-    StarSample s;
+bool loadStar(float starId, int layerIndex, out StarSample s) {
     vec4 r0 = readDescriptorRow(starId, 0.0);
+    int starLayer = int(r0.z + 0.5);
+    if (starLayer != layerIndex) {
+        return false;
+    }
     vec4 r1 = readDescriptorRow(starId, 1.0);
     vec4 r2 = readDescriptorRow(starId, 2.0);
     s.position = r0.xy;
@@ -142,7 +169,7 @@ StarSample loadStar(float starId) {
     s.sparklePhase = r2.y;
     s.intensity = r2.z;
     s.heroFlag = r2.w;
-    return s;
+    return true;
 }
 
 vec3 shadeStar(
@@ -155,11 +182,12 @@ vec3 shadeStar(
     float softness,
     float twinkle,
     float glowMix,
-    float glowBoost
+    float glowBoost,
+    float glowRadiusGain
 ) {
     if (starId < 0.0 || starId >= u_starCount) return vec3(0.0);
-    StarSample star = loadStar(starId);
-    if (int(star.layerId + 0.5) != layerIndex) {
+    StarSample star;
+    if (!loadStar(starId, layerIndex, star)) {
         return vec3(0.0);
     }
     float worldCellSize = layerScale * invCells;
@@ -167,15 +195,16 @@ vec3 shadeStar(
     vec2 starPos = star.position;
     vec2 delta = wrapLayerSpace(fragLocal - starPos, layerScale);
     float dist = length(delta);
-    float profile = starProfile(dist, baseRadius, softness) * star.coreScale * layerWeight;
-    float haloRadius = max(baseRadius * star.haloScale, baseRadius * 1.1) + 0.0003;
-    float glowShell = 1.0 / (1.0 + pow(dist / haloRadius, 3.0));
+    bool isHero = star.heroFlag > 0.5;
+    float glowEnergy = evalGlowEnergy(dist, baseRadius, softness, star.coreScale, star.haloScale, glowRadiusGain, glowMix, isHero);
     float sparkleBase = sin(u_time * (0.6 + star.intensity * 2.4) + star.sparklePhase);
     float sparkle = mix(1.0, 0.7 + 0.3 * sparkleBase, twinkle);
-    if (star.heroFlag > 0.5) {
-        sparkle = mix(sparkle, sparkle * 1.35, twinkle);
+    if (isHero) {
+        float heroLift = mix(1.0, 1.25 + glowMix * 0.4, twinkle);
+        sparkle = mix(sparkle, sparkle * heroLift, 0.65);
+        glowEnergy *= mix(1.0, 1.1 + glowRadiusGain * 0.15, glowMix);
     }
-    float haloEnergy = mix(profile, glowShell, glowMix) * star.intensity * sparkle * glowBoost;
+    float haloEnergy = glowEnergy * star.intensity * sparkle * glowBoost * layerWeight;
     return star.tint * haloEnergy;
 }
 
@@ -193,15 +222,29 @@ void accumulateRange(
     float twinkle,
     float glowMix,
     float glowBoost,
+    float glowRadiusGain,
     inout vec3 accum
 ) {
     float baseOffset = indexInfo.x;
-    float count = indexInfo.y;
-    if (count <= 0.0) return;
+    int countInt = int(floor(max(0.0, indexInfo.y) + 0.5));
+    if (countInt <= 0) return;
+    int loopCount = min(MAX_CELL_STAR_LOOP, countInt);
     for (int i = 0; i < MAX_CELL_STAR_LOOP; ++i) {
-        if (float(i) >= count) break;
+        if (i >= loopCount) break;
         float starId = readIdValue(idTex, idWidth, idHeight, baseOffset + float(i));
-        accum += shadeStar(starId, fragLocal, layerIndex, layerScale, invCells, layerWeight, softness, twinkle, glowMix, glowBoost);
+        accum += shadeStar(
+            starId,
+            fragLocal,
+            layerIndex,
+            layerScale,
+            invCells,
+            layerWeight,
+            softness,
+            twinkle,
+            glowMix,
+            glowBoost,
+            glowRadiusGain
+        );
     }
 }
 
@@ -215,15 +258,20 @@ void main() {
     vec3 accum = vec3(0.0);
     float softness = clamp(u_starFastSoft, 0.0, 1.0);
     float twinkle = clamp(u_starFastTwinkle, 0.0, 1.0);
-    float glowBoost = 1.0 + u_starFastGlow * 0.8;
-    float glowMix = clamp(u_starFastGlow, 0.0, 1.0);
+    float glowNorm = clamp(u_starFastGlow / 2.0, 0.0, 1.0);
+    float glowShape = pow(glowNorm, 1.5);
+    float glowBoost = 1.0 + glowShape * 0.5;
+    float glowMix = glowShape;
+    float radiusNorm = clamp(u_starFastGlowRad / 1.2, 0.0, 1.0);
+    float radiusShape = pow(radiusNorm, 1.4);
+    float glowRadiusGain = mix(0.6, 1.8, radiusShape);
+    float densityNorm = clamp(u_starFastDensity / 200.0, 0.0, 1.0);
     int totalLayers = max(1, int(floor(u_starLayerCount + 0.5)));
 
     bool debugActive = u_debugCellEnabled > 0.5;
 
     for (int layer = 0; layer < MAX_LAYERS; ++layer) {
         if (layer >= totalLayers) break;
-        if (layer > 0) break;
         vec4 layerInfo = readLayerInfo(layer);
         float cellsPerAxis = max(1.0, layerInfo.x);
         float invCells = max(1.0 / cellsPerAxis, layerInfo.y);
@@ -245,7 +293,9 @@ void main() {
             && cell.y == int(floor(u_debugCellY + 0.5));
 
         float layerLerp = totalLayers > 1 ? float(layer) / float(totalLayers - 1) : 0.0;
-        float layerWeight = mix(1.1, 0.32, layerLerp);
+        float parallaxWeight = mix(1.15, 0.24, layerLerp);
+        float densityLift = mix(0.85, 1.2, densityNorm);
+        float layerWeight = parallaxWeight * densityLift;
 
         vec2 localInfo = readIndexValue(u_starLocalIndexTex, u_starLocalIndexWidth, u_starLocalIndexHeight, cellIndex);
         vec2 spillInfo = readIndexValue(u_starSpillIndexTex, u_starSpillIndexWidth, u_starSpillIndexHeight, cellIndex);
@@ -264,6 +314,7 @@ void main() {
             twinkle,
             glowMix,
             glowBoost,
+            glowRadiusGain,
             accum
         );
 
@@ -281,6 +332,7 @@ void main() {
             twinkle,
             glowMix,
             glowBoost,
+            glowRadiusGain,
             accum
         );
 

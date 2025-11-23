@@ -13,7 +13,7 @@ void *memset(void *dest, int value, size_t count) {
 #define MAX_LAYERS 4
 #define LAYER_INFO_COMPONENTS 4
 #define STAR_DESCRIPTOR_FLOATS 12
-#define MAX_STARS 20000
+#define MAX_STARS 35000
 #define MAX_STARS_PER_CELL 8
 #define MAX_CELLS (24 * 24 + 36 * 36 + 48 * 48 + 64 * 64)
 #define MAX_LOCAL_IDS MAX_STARS

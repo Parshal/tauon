@@ -38,7 +38,22 @@ This note captures the end-to-end path for GPU-visible data that originates insi
   1. Read layer info (grid size, scale, offsets).
   2. Determine current cell index from fragment’s layer-space coordinates.
   3. Fetch `(offset,count)` for local + spill stars from index textures.
-  4. Loop indices (capped by `MAX_CELL_STAR_LOOP`), sample descriptor rows, shade each star via `shadeStar` (core/halo profiles, glow LUT, sparkle) and accumulate color.
+  4. Loop indices (capped by `MAX_CELL_STAR_LOOP`), sample descriptor rows lazily (discarding off-layer IDs before fetching the remaining rows), shade each star via the glow LUT, and accumulate color.
+  5. All layers now participate in accumulation with parallax-weighted blending so density can be distributed instead of forcing layer 0 to do all the work.
+
+### Parameter mapping cheatsheet (fast-star path)
+
+- **Density (`starFastDensity`)**
+  - UI range: `0–200`.
+  - WASM maps it to a physical density via an exponential curve between ~5 and 200 before generating up to ~35 000 stars.
+
+- **Softness / Glow / Radius (`starFastSoft`, `starFastGlow`, `starFastGlowRad`)**
+  - JS normalizes these and shapes them non-linearly before rebuilding the glow LUT and feeding shader uniforms.
+  - The all-zero corner (`FastSft/Glw/Rad = 0`) is treated as a tight, almost halo-free core profile.
+  - Increasing values first passes through a Krita-like profile (bright compact core, gentle halo) and only then into large, stylized halos.
+
+- **Exposure (`starFastBright`)**
+  - Constrained to `0–2` for the fast-star pass and applied as a simple multiplicative gain in `star2.frag.glsl`.
 
 ## 5. Extending / Swapping
 To adapt this pipeline for a new shader or data source:

@@ -760,8 +760,12 @@ export class NebulaRenderer {
 
   updateGlowLookup(data) {
     if (!this.glowLUTCompiler || !this.glowLUTTexture) return;
-    const heroBias = clamp01((data.starFastGlowRad ?? 0) / 1.2);
-    const glowMax = clamp01((data.starFastGlow ?? 0) / 2.0);
+    const rawHero = data.starFastGlowRad ?? 0;
+    const rawGlow = data.starFastGlow ?? 0;
+    const heroNorm = clamp01(rawHero / 1.2);
+    const glowNorm = clamp01(rawGlow / 2.0);
+    const heroBias = Math.pow(heroNorm, 1.35);
+    const glowMax = Math.pow(glowNorm, 1.5);
     if (heroBias === this.glowState.hero && glowMax === this.glowState.glow) return;
     const payload = this.glowLUTCompiler.rebuild(heroBias, glowMax);
     const gl = this.gl;
