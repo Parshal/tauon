@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Cosmic Dream (Drop-in Plugin Demo)</title>
+<title>Cosmic Dream v2.1 (Fixed HUD)</title>
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <style>
   /* prefixed styles to avoid collisions: cd- */
@@ -30,66 +30,29 @@
     z-index: -9999;
     pointer-events: none;
     display: block;
-    mix-blend-mode: screen;
-    opacity: 0.98;
-    will-change: transform, opacity;
+    mix-blend-mode: screen; 
+    opacity: 1.0;
+    will-change: transform;
     background: var(--cd-bg-void);
-  }
-
-  /* spotlight / glow overlay */
-  .cd-spotlight {
-    position: fixed;
-    width: min(760px, 95%);
-    height: 88vh;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background:
-      radial-gradient(ellipse at 50% 30%, rgba(200, 120, 255, 0.78) 0%, transparent 60%),
-      radial-gradient(ellipse at 50% 50%, rgba(100, 180, 255, 0.7) 0%, transparent 70%),
-      radial-gradient(ellipse at 50% 70%, rgba(255, 140, 200, 0.6) 0%, transparent 65%);
-    filter: blur(88px);
-    z-index: -998;
-    animation: cd-spotlightPulse 12s ease-in-out infinite;
-    pointer-events: none;
-    will-change: transform, opacity;
-  }
-  @keyframes cd-spotlightPulse {
-    0%   { transform: translate(-52%, -48%) scale(1) rotate(0deg); opacity: 0.75; }
-    25%  { transform: translate(-46%, -52%) scale(1.03) rotate(2deg); opacity: 0.88; }
-    50%  { transform: translate(-50%, -50%) scale(1.12) rotate(-1deg); opacity: 1; }
-    75%  { transform: translate(-54%, -49%) scale(1.05) rotate(3deg); opacity: 0.9; }
-    100% { transform: translate(-52%, -48%) scale(1) rotate(0deg); opacity: 0.75; }
   }
 
   /* floating glass container */
   .cd-card-container {
-    width: min(760px, 94%);
+    width: min(900px, 95%);
     max-height: 92vh;
-    overflow-y: auto;
     padding: 36px;
     position: relative;
-    margin: 5vh auto;
+    margin: 5vh auto 300px; /* Extra margin for the taller dock */
     z-index: 10;
     background:
-      radial-gradient(ellipse at 50% 40%, rgba(200, 140, 255, 0.35) 0%, transparent 70%),
-      radial-gradient(ellipse at 50% 60%, rgba(120, 200, 255, 0.3) 0%, transparent 70%),
-      linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 25%),
-      rgba(255,255,255,0.06);
+      linear-gradient(180deg, rgba(255,255,255,0.08) 0%, transparent 25%),
+      rgba(0,0,0,0.2);
     border-radius: 28px;
     box-shadow:
       0 0 0 1px rgba(255,255,255,0.12) inset,
-      0 0 80px rgba(180, 100, 255, 0.65),
-      0 30px 60px rgba(150, 120, 255, 0.55);
-    border: 1px solid rgba(255,255,255,0.18);
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255,255,255,0.12) transparent;
-    outline: none;
-  }
-  .cd-card-container::-webkit-scrollbar { width: 8px; }
-  .cd-card-container::-webkit-scrollbar-thumb {
-    background: rgba(255,255,255,0.06);
-    border-radius: 999px;
+      0 20px 40px rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(12px);
   }
 
   /* tree + nodes */
@@ -143,99 +106,192 @@
   .cd-info, .cd-badge { position: relative; z-index: 3; }
   .cd-title { font-weight:600; font-size:16px; color:white; letter-spacing:-0.01em; text-shadow:0 2px 8px rgba(0,0,0,0.5); }
   .cd-meta { font-size:11px; opacity:0.75; margin-top:4px; text-transform:uppercase; letter-spacing:0.05em; font-weight:500; color:#ddd; }
-
   .cd-badge { font-size:11px; font-weight:700; padding:6px 10px; border-radius:8px; background: rgba(255,255,255,0.10); border:1px solid rgba(255,255,255,0.12); color:hsl(var(--hue-border),100%,95%); min-width:36px; text-align:center; box-shadow:0 2px 12px rgba(0,0,0,0.28); transition: all .24s ease; }
-  .cd-node-inner:hover .cd-badge { background: rgba(255,255,255,0.18); transform: scale(1.04); }
-
   .cd-children { margin-left:28px; padding-left:18px; display:flex; flex-direction:column; gap:14px; border-left:1px solid rgba(255,255,255,0.12); position:relative; }
   .cd-children::before { content:''; position:absolute; left:-1px; top:0; bottom:0; width:1px; background: linear-gradient(to bottom, rgba(255,255,255,0.45), transparent); }
 
-  @keyframes cd-floatNode { 0%,100%{transform:translateY(0px);}50%{transform:translateY(-4px);} }
-
-  @media (prefers-reduced-motion: reduce) {
-    canvas.cd-bgCanvas, .cd-spotlight, .cd-node-inner { animation: none !important; transition: none !important; }
+  /* --- HUD DOCK (Redesigned) --- */
+  .cd-hud-dock {
+    position: fixed;
+    bottom: 20px;
+    left: 2%;
+    width: 96%;
+    height: 260px; /* Increased height for full stack */
+    z-index: 9999;
+    background: rgba(5, 7, 14, 0.85);
+    backdrop-filter: blur(16px);
+    border-radius: 24px;
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.15);
+    display: flex;
+    flex-direction: column;
+    padding: 16px 20px;
+    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    transform: translateY(0);
   }
 
-  /* tiny helper for hidden state in plugin mode */
-  .cd-hidden { display:none !important; }
+  .cd-hud-dock.minimized {
+    transform: translateY(calc(100% - 44px));
+  }
+
+  .cd-hud-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding: 0 4px;
+    flex-shrink: 0;
+  }
+  
+  .cd-hud-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: rgba(255,255,255,0.6);
+    display:flex; gap:10px; align-items:center;
+  }
+
+  /* Scroll Container */
+  .cd-controls-scroll {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    height: 100%;
+    padding-bottom: 10px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.2) transparent;
+    align-items: flex-start;
+  }
+  .cd-controls-scroll::-webkit-scrollbar { height: 6px; }
+  .cd-controls-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius:4px; }
+
+  /* Individual Control Strip */
+  .cd-control {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    width: 52px; /* Wider for inputs */
+    min-width: 52px;
+    height: 100%;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 16px;
+    padding: 10px 4px;
+  }
+
+  .cd-control:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.1); }
+
+  .cd-control-label {
+    font-size: 9px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    text-align: center;
+    margin-bottom: 8px;
+    height: 12px;
+    white-space: nowrap;
+  }
+
+  /* The Input Boxes */
+  .cd-control-input {
+    width: 100%;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #fff;
+    font-family: monospace;
+    font-size: 10px;
+    text-align: center;
+    border-radius: 4px;
+    padding: 4px 0;
+    outline: none;
+    transition: border 0.2s;
+  }
+  .cd-control-input:focus { border-color: rgba(255,255,255,0.5); background: rgba(0,0,0,0.5); }
+  
+  /* Special styling for main value */
+  .cd-control-input.main-val {
+    font-weight: 700;
+    color: #aaddff;
+    border-color: rgba(100,150,255,0.3);
+    margin-top: 8px;
+  }
+
+  /* The Slider */
+  .cd-control-slider {
+    appearance: none;
+    -webkit-appearance: slider-vertical; /* Standard vertical slider */
+    writing-mode: bt-lr;
+    width: 24px;
+    flex-grow: 1; /* Take available space */
+    margin: 8px 0;
+    background: rgba(255,255,255,0.1);
+    border-radius: 99px;
+    outline: none;
+    cursor: ns-resize;
+  }
+
+  .cd-control-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    border: 2px solid #111;
+    margin-left: -8px; /* Alignment fix for some browsers */
+  }
+
+  .cd-copy-btn {
+    background: rgba(255,255,255,0.1);
+    border: none; color: white; padding: 8px 16px;
+    border-radius: 8px; font-size: 11px; cursor: pointer;
+    font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    transition: background 0.2s;
+  }
+  .cd-copy-btn:hover { background: rgba(255,255,255,0.25); }
+
+  @keyframes cd-floatNode { 0%,100%{transform:translateY(0px);}50%{transform:translateY(-4px);} }
 </style>
 </head>
 <body>
 
-<!-- DEMO: content will be wrapped by plugin when script runs.
-     If you include the plugin as a script on an arbitrary page, it will
-     attempt to move existing page children into the cd-card-container
-     (unless configured otherwise). -->
 <div id="demo-root">
-  <h1 style="text-align:center; color:#fff; margin-top:28vh; opacity:0.95">Cosmic Dream — Drop-in Plugin Demo</h1>
-  <p style="text-align:center; color:rgba(255,255,255,0.75)">Scroll down to see tree. When integrated into any page the plugin can optionally wrap your page content.</p>
+  <h1 style="text-align:center; color:#fff; margin-top:15vh; opacity:0.95">Cosmic Dream</h1>
+  <h3 style="text-align:center; color:rgba(255,255,255,0.5); font-weight:400; font-size:14px;">Multi-Layer WebGL System</h3>
 </div>
 
-<!-- Original Dream Tree markup (kept as a demo). Plugin will find .cd-node-inner elements and animate them -->
-<div id="demo-tree" style="max-width:760px; margin: 40px auto 120px;">
-  <div class="cd-card-container cd-demo-card" role="region" aria-label="Dream Systems tree - demo">
-    <div class="cd-tree" id="dreamTree" role="list">
+<div id="demo-tree" style="max-width:760px; margin: 40px auto 0;">
+  <div class="cd-card-container cd-demo-card">
+    <div class="cd-tree" id="dreamTree">
       <div class="cd-hue-node">
-        <div class="cd-node-inner" tabindex="0" role="listitem" aria-label="Core System, root">
-          <div class="cd-info">
-            <div class="cd-title">Core System</div>
-            <div class="cd-meta">Root</div>
-          </div>
+        <div class="cd-node-inner">
+          <div class="cd-info"><div class="cd-title">Core System</div><div class="cd-meta">Root</div></div>
           <div class="cd-badge">001</div>
         </div>
-
         <div class="cd-children">
           <div class="cd-hue-node">
-            <div class="cd-node-inner" tabindex="0" role="listitem" aria-label="Nexus Alpha, depth one">
-              <div class="cd-info">
-                <div class="cd-title">Nexus Alpha</div>
-                <div class="cd-meta">Depth I</div>
-              </div>
+            <div class="cd-node-inner">
+              <div class="cd-info"><div class="cd-title">Nexus Alpha</div><div class="cd-meta">Depth I</div></div>
               <div class="cd-badge">A</div>
             </div>
           </div>
-
           <div class="cd-hue-node">
-            <div class="cd-node-inner" tabindex="0" role="listitem" aria-label="Nexus Beta, depth one">
-              <div class="cd-info">
-                <div class="cd-title">Nexus Beta</div>
-                <div class="cd-meta">Depth I</div>
-              </div>
+            <div class="cd-node-inner">
+              <div class="cd-info"><div class="cd-title">Nexus Beta</div><div class="cd-meta">Depth I</div></div>
               <div class="cd-badge">B</div>
             </div>
-
             <div class="cd-children">
               <div class="cd-hue-node">
-                <div class="cd-node-inner" tabindex="0" role="listitem" aria-label="Subroutine B.1, depth two">
-                  <div class="cd-info">
-                    <div class="cd-title">Subroutine B.1</div>
-                    <div class="cd-meta">Depth II</div>
-                  </div>
+                <div class="cd-node-inner">
+                  <div class="cd-info"><div class="cd-title">Subroutine B.1</div><div class="cd-meta">Depth II</div></div>
                   <div class="cd-badge">B.1</div>
                 </div>
               </div>
-
-              <div class="cd-hue-node">
-                <div class="cd-node-inner" tabindex="0" role="listitem" aria-label="Subroutine B.2, depth two">
-                  <div class="cd-info">
-                    <div class="cd-title">Subroutine B.2</div>
-                    <div class="cd-meta">Depth II</div>
-                  </div>
-                  <div class="cd-badge">B.2</div>
-                </div>
-              </div>
-
-              <div class="cd-hue-node">
-                <div class="cd-node-inner" tabindex="0" role="listitem" aria-label="Subroutine B.3, depth two">
-                  <div class="cd-info">
-                    <div class="cd-title">Subroutine B.3</div>
-                    <div class="cd-meta">Depth II</div>
-                  </div>
-                  <div class="cd-badge">B.3</div>
-                </div>
-              </div>
             </div>
-
           </div>
         </div>
       </div>
@@ -243,671 +299,419 @@
   </div>
 </div>
 
-<!-- =========================
-     Drop-in Plugin Script
-     Put this in a file and include, or keep inline.
-     Global config: window.CosmicDreamConfig
-     Methods: CosmicDream.init(), CosmicDream.pause(), CosmicDream.resume()
-     ========================= -->
 <script>
-/* Cosmic Dream Drop-in Plugin
-   - Auto-initializes (can be disabled by setting CosmicDreamConfig.autoInit = false)
-   - Configurable through window.CosmicDreamConfig or data attributes
-*/
-
-(function(global){
-  const PLUGIN_PREFIX = 'cd';
-  const DEFAULTS = {
-    autoInit: true,          // auto-run init on load
-    wrapBody: true,          // move existing body children into card container
-    starDensity: 0.08,
-    hueBase: 240,            // starting hue (deg)
-    twinkle: 8.0,
-    flow: 1.0,
-    grain: 0.35,
-    bloomStrength: 0.9,
-    colorBandShift: 90,
-    bandMix: 0.45,
-    speedFill: { min: 0.03, max: 0.07 },   // deg/frame hint -> we'll convert to deg/sec inside engine
-    speedBorder: { min: 0.15, max: 0.4 },
-    glowIntensity: 1.0,
-    selectorNodeInner: '.cd-node-inner', // which elements to animate
-    cssPrefix: 'cd'
-  };
-
-  function toNumber(value, fallback) {
-    const num = Number(value);
-    return Number.isFinite(num) ? num : fallback;
-  }
-
-  // Merge config from window and script tag data attributes
-  function readConfig() {
-    const user = (global.CosmicDreamConfig && typeof global.CosmicDreamConfig === 'object') ? global.CosmicDreamConfig : {};
-    // find the current script tag to read data-attrs, if present
-    const currentScript = document.currentScript || document.querySelector('script[src*="cosmic"]') || null;
-    const data = {};
-    if (currentScript && currentScript.dataset) {
-      for (const k in currentScript.dataset) {
-        if (k.startsWith('cosmic')) {
-          const prop = k.replace(/^cosmic/, '');
-          const propName = prop.charAt(0).toLowerCase() + prop.slice(1);
-          data[propName] = currentScript.dataset[k];
-        }
-      }
+  /* Cosmic Dream Drop-in Plugin - v2.1 (Fixed HUD) */
+  (function(global){
+    const PLUGIN_PREFIX = 'cd';
+    const DEFAULTS = {
+      autoInit: true,
+      // Visual Defaults
+      layers: 3.0,
+      hueBase: 220,
+      hueSpeed: 0.2,
+      flow: 0.4,
+      rotFlow: 0.2,
+      zoom: 1.0,
+      nebulaScale: 0.8,
+      detailScale: 2.0,
+      brightness: 1.2,
+      contrast: 1.1,
+      voidCut: 0.4,
+      starDensity: 0.15,
+      colorSpread: 60.0,
+      layerDecay: 0.6,
+      selectorNodeInner: '.cd-node-inner'
+    };
+  
+    const CONTROL_PARAMS = [
+      { key: 'layers', label: 'Layers', min: 1, max: 5, step: 1 },
+      { key: 'hueBase', label: 'Hue', min: 0, max: 360, step: 1 },
+      { key: 'hueSpeed', label: 'Hue Cyc', min: -2, max: 2, step: 0.01 },
+      { key: 'rotFlow', label: 'Rot Spd', min: -1.0, max: 1.0, step: 0.01 },
+      { key: 'flow', label: 'Flow', min: 0, max: 2, step: 0.01 },
+      { key: 'zoom', label: 'Zoom', min: 0.5, max: 3.0, step: 0.01 },
+      { key: 'nebulaScale', label: 'Cld Size', min: 0.1, max: 2.0, step: 0.01 },
+      { key: 'detailScale', label: 'Detail', min: 0.0, max: 4.0, step: 0.01 },
+      { key: 'brightness', label: 'Bright', min: 0.0, max: 3.0, step: 0.05 },
+      { key: 'contrast', label: 'Contrst', min: 0.5, max: 2.5, step: 0.01 },
+      { key: 'voidCut', label: 'Void', min: 0.0, max: 0.9, step: 0.01 },
+      { key: 'colorSpread', label: 'C. Sprd', min: 0, max: 180, step: 1 },
+      { key: 'layerDecay', label: 'Fade', min: 0.1, max: 1.0, step: 0.01 },
+      { key: 'starDensity', label: 'Stars', min: 0, max: 0.5, step: 0.01 },
+    ];
+  
+    function toNumber(value, fallback) {
+      const num = Number(value);
+      return Number.isFinite(num) ? num : fallback;
     }
-    // coerce numeric values if possible
-    const merged = Object.assign({}, DEFAULTS, user, data);
-    merged.starDensity = toNumber(merged.starDensity, DEFAULTS.starDensity);
-    merged.hueBase = toNumber(merged.hueBase, DEFAULTS.hueBase);
-    merged.twinkle = toNumber(merged.twinkle, DEFAULTS.twinkle);
-    merged.flow = toNumber(merged.flow, DEFAULTS.flow);
-    merged.grain = toNumber(merged.grain, DEFAULTS.grain);
-    merged.bloomStrength = toNumber(merged.bloomStrength, DEFAULTS.bloomStrength);
-    merged.colorBandShift = toNumber(merged.colorBandShift, DEFAULTS.colorBandShift);
-    merged.bandMix = Math.min(1, Math.max(0, toNumber(merged.bandMix, DEFAULTS.bandMix)));
-    merged.glowIntensity = toNumber(merged.glowIntensity, DEFAULTS.glowIntensity);
-    merged.wrapBody = (merged.wrapBody === false || merged.wrapBody === 'false') ? false : Boolean(merged.wrapBody);
-    merged.autoInit = (merged.autoInit === false || merged.autoInit === 'false') ? false : Boolean(merged.autoInit);
-    return merged;
-  }
+    function clamp(val, min, max) { return Math.min(max, Math.max(min, val)); }
+    function rand(min, max){ return Math.random() * (max - min) + min; }
+    
+    let config = Object.assign({}, DEFAULTS);
+    let canvas, gl, program, animationFrameId = null, isPaused = false;
+    let startTime = performance.now();
+    let hueNodes = [];
+    const uniformLocations = {};
+    
+    // --- HUD CREATION ---
+    function createHUD() {
+      if (document.querySelector('.cd-hud-dock')) return;
+      
+      const dock = document.createElement('div');
+      dock.className = 'cd-hud-dock';
+      
+      const header = document.createElement('div');
+      header.className = 'cd-hud-header';
+      
+      const title = document.createElement('div');
+      title.className = 'cd-hud-title';
+      title.innerHTML = '<span>SYS.CONFIG</span> <span style="opacity:0.4">//</span> <span>WEBGL2</span>';
+      
+      const actions = document.createElement('div');
+      actions.style.display = 'flex';
+      actions.style.gap = '8px';
 
-  // utility
-  function rand(min, max){ return Math.random() * (max - min) + min; }
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'cd-copy-btn';
+      copyBtn.innerText = 'COPY JSON';
+      copyBtn.onclick = () => {
+        const json = JSON.stringify(config, null, 2);
+        navigator.clipboard.writeText(json).then(() => {
+            copyBtn.innerText = 'COPIED!';
+            setTimeout(() => copyBtn.innerText = 'COPY JSON', 1500);
+        });
+      };
+      
+      const toggleBtn = document.createElement('button');
+      toggleBtn.className = 'cd-copy-btn';
+      toggleBtn.innerText = '_';
+      toggleBtn.onclick = () => dock.classList.toggle('minimized');
 
-  // main state & runtime handles
-  let config = readConfig();
-  let canvas, gl, usingWebGL = false, rafId = null, program = null, vao = null, startTime = null, renderRunning = true;
-  let u_resolution, u_time, u_hueBase, u_starDensity, u_twinkle, u_flow, u_grain, u_bloomStrength, u_colorBandShift, u_bandMix;
-  let animatedNodes = [], lastTimestamp = null, loopStarted = false;
-  let visibilityPaused = false;
+      actions.appendChild(copyBtn);
+      actions.appendChild(toggleBtn);
+      header.appendChild(title);
+      header.appendChild(actions);
+      dock.appendChild(header);
+      
+      const scroll = document.createElement('div');
+      scroll.className = 'cd-controls-scroll';
+      
+      CONTROL_PARAMS.forEach(p => {
+        const el = document.createElement('div');
+        el.className = 'cd-control';
+        
+        // Label (Top)
+        const label = document.createElement('div');
+        label.className = 'cd-control-label';
+        label.innerText = p.label;
+        
+        // Max Input (Top Box)
+        const maxInput = document.createElement('input');
+        maxInput.type = 'number';
+        maxInput.className = 'cd-control-input';
+        maxInput.value = p.max;
+        maxInput.step = p.step;
+        
+        // Slider (Middle)
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.className = 'cd-control-slider';
+        slider.min = p.min;
+        slider.max = p.max;
+        slider.step = p.step;
+        slider.value = config[p.key];
+        slider.setAttribute('orient', 'vertical');
+        
+        // Min Input (Bottom Box)
+        const minInput = document.createElement('input');
+        minInput.type = 'number';
+        minInput.className = 'cd-control-input';
+        minInput.value = p.min;
+        minInput.step = p.step;
 
-  // create and insert canvas/spotlight/card container
-  function injectUI() {
-    // ensure no double-insert
-    if (!document.body) return null;
+        // Value Input (Very Bottom)
+        const valDisp = document.createElement('input');
+        valDisp.type = 'number';
+        valDisp.className = 'cd-control-input main-val';
+        valDisp.value = config[p.key];
+        valDisp.step = p.step;
+        
+        // --- EVENTS ---
+        
+        // Slider Move
+        slider.addEventListener('input', (e) => {
+          const v = Number(e.target.value);
+          config[p.key] = v;
+          valDisp.value = v; // Update Main Display
+        });
 
-    // canvas
-    if (!document.querySelector('canvas.' + PLUGIN_PREFIX + '-bgCanvas')) {
-      canvas = document.createElement('canvas');
-      canvas.className = PLUGIN_PREFIX + '-bgCanvas';
-      canvas.setAttribute('aria-hidden', 'true');
-      document.body.appendChild(canvas);
-    } else {
-      canvas = document.querySelector('canvas.' + PLUGIN_PREFIX + '-bgCanvas');
+        // Main Value Type
+        valDisp.addEventListener('change', (e) => {
+          let v = Number(e.target.value);
+          v = clamp(v, Number(minInput.value), Number(maxInput.value));
+          config[p.key] = v;
+          slider.value = v;
+          valDisp.value = v;
+        });
+
+        // Max Change
+        maxInput.addEventListener('change', (e) => {
+          const newMax = Number(e.target.value);
+          slider.max = newMax;
+          if(Number(slider.value) > newMax) {
+             slider.value = newMax;
+             config[p.key] = newMax;
+             valDisp.value = newMax;
+          }
+        });
+
+        // Min Change
+        minInput.addEventListener('change', (e) => {
+          const newMin = Number(e.target.value);
+          slider.min = newMin;
+          if(Number(slider.value) < newMin) {
+             slider.value = newMin;
+             config[p.key] = newMin;
+             valDisp.value = newMin;
+          }
+        });
+        
+        el.appendChild(label);
+        el.appendChild(maxInput);
+        el.appendChild(slider);
+        el.appendChild(minInput);
+        el.appendChild(valDisp);
+        scroll.appendChild(el);
+      });
+      
+      dock.appendChild(scroll);
+      document.body.appendChild(dock);
     }
 
-    // spotlight
-    if (!document.querySelector('.' + PLUGIN_PREFIX + '-spotlight')) {
-      const sp = document.createElement('div');
-      sp.className = PLUGIN_PREFIX + '-spotlight';
-      sp.setAttribute('aria-hidden', 'true');
-      document.body.appendChild(sp);
-    }
-
-    // find or create card container
-    let card = document.querySelector('.' + PLUGIN_PREFIX + '-card-container');
-    if (!card) {
-      card = document.createElement('div');
-      card.className = PLUGIN_PREFIX + '-card-container';
-      card.setAttribute('role', 'region');
-      card.setAttribute('aria-label', 'Cosmic Dream container');
-      // place near top but after canvas so it's visible
-      document.body.appendChild(card);
-    }
-    return { canvas, card };
-  }
-
-  /* =========================
-     WebGL / Canvas2D background
-     ========================= */
-
-  function initGL() {
-    if (!canvas) return;
-    gl = canvas.getContext('webgl2', { antialias:true, alpha:true });
-    usingWebGL = !!gl;
-    if (!gl) {
-      // fallback: simple canvas2d loop
-      const ctx2 = canvas.getContext('2d');
-      function resize2(){
-        const dpr = Math.max(1, window.devicePixelRatio || 1);
-        const w = Math.floor(canvas.clientWidth * dpr), h = Math.floor(canvas.clientHeight * dpr);
-        if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
-      }
-      function render2(now) {
-        resize2();
-        const t = now * 0.001;
-        const g = ctx2.createLinearGradient(0, 0, 0, canvas.height);
-        g.addColorStop(0, '#1a1230');
-        g.addColorStop(1, '#021018');
-        ctx2.fillStyle = g;
-        ctx2.fillRect(0,0,canvas.width,canvas.height);
-        // cheap stars (sparse)
-        const N = Math.round(80 + config.starDensity * 500);
-        for (let i=0;i<N;i++){
-          const x = Math.random()*canvas.width, y = Math.random()*canvas.height;
-          ctx2.fillStyle = `rgba(255,255,255,${0.15*Math.random()+0.02})`;
-          ctx2.fillRect(x,y, Math.random()*2+0.3, Math.random()*2+0.3);
-        }
-        if (renderRunning) requestAnimationFrame(render2);
-      }
-      requestAnimationFrame(render2);
-      return;
-    }
-
-    // --- WebGL shader sources (same unified nebula+stars) ---
-    const vsSource = `#version 300 es
-    precision mediump float;
-    in vec2 a_pos;
+    // --- SHADER SOURCES (Unchanged Logic) ---
+    const V_SHADER = `#version 300 es
+    in vec4 a_position;
     out vec2 v_uv;
-    void main(){
-      v_uv = a_pos * 0.5 + 0.5;
-      gl_Position = vec4(a_pos, 0.0, 1.0);
-    }`;
+    void main() {
+        gl_Position = a_position;
+        v_uv = (a_position.xy * 0.5) + 0.5;
+    }
+    `;
 
-    const fsSource = `#version 300 es
+    const F_SHADER = `#version 300 es
     precision highp float;
     out vec4 outColor;
     in vec2 v_uv;
 
-    uniform vec2 u_resolution;
+    uniform vec2 u_res;
     uniform float u_time;
+    uniform float u_layers;
     uniform float u_hueBase;
-    uniform float u_starDensity;
-    uniform float u_twinkle;
+    uniform float u_hueSpeed;
     uniform float u_flow;
-    uniform float u_grain;
-    uniform float u_bloomStrength;
-    uniform float u_colorBandShift;
-    uniform float u_bandMix;
+    uniform float u_rotFlow;
+    uniform float u_zoom;
+    uniform float u_nebulaScale;
+    uniform float u_detailScale;
+    uniform float u_brightness;
+    uniform float u_contrast;
+    uniform float u_voidCut;
+    uniform float u_colorSpread;
+    uniform float u_layerDecay;
+    uniform float u_starDensity;
 
-    float hash(vec2 p){
+    float hash(vec2 p) {
         p = fract(p * vec2(123.34, 456.21));
         p += dot(p, p + 45.32);
         return fract(p.x * p.y);
     }
 
-    float noise(vec2 p){
+    mat2 rot(float a) {
+        float s = sin(a);
+        float c = cos(a);
+        return mat2(c, -s, s, c);
+    }
+
+    float noise(vec2 p) {
         vec2 i = floor(p);
         vec2 f = fract(p);
         vec2 u = f*f*(3.0-2.0*f);
-        float a = hash(i + vec2(0.0,0.0));
-        float b = hash(i + vec2(1.0,0.0));
-        float c = hash(i + vec2(0.0,1.0));
-        float d = hash(i + vec2(1.0,1.0));
-        return mix(mix(a,b,u.x), mix(c,d,u.x), u.y);
+        return mix(mix(hash(i + vec2(0.0,0.0)), hash(i + vec2(1.0,0.0)), u.x),
+                   mix(hash(i + vec2(0.0,1.0)), hash(i + vec2(1.0,1.0)), u.x), u.y);
     }
 
-    mat2 rot(float a){
-        float c = cos(a), s = sin(a);
-        return mat2(c,-s,s,c);
-    }
-
-    float fbm(vec2 p){
+    float fbm(vec2 p) {
         float v = 0.0;
-        float amp = 0.55;
+        float amp = 0.5;
+        vec2 shift = vec2(100.0);
         mat2 m = rot(0.5);
-        for(int i=0;i<5;i++){
+        for(int i=0; i<3; i++) {
             v += amp * noise(p);
-            p = m * (p * 2.0 + vec2(1.3,-0.7));
+            p = m * p * 2.0 + shift;
             amp *= 0.5;
         }
         return v;
-    }
-
-    vec2 curlNoise(vec2 p){
-        float eps = 0.001;
-        float n1 = fbm(p + vec2(eps,0.0));
-        float n2 = fbm(p - vec2(eps,0.0));
-        float n3 = fbm(p + vec2(0.0,eps));
-        float n4 = fbm(p - vec2(0.0,eps));
-        float dx = (n1 - n2) / (2.0 * eps);
-        float dy = (n3 - n4) / (2.0 * eps);
-        return normalize(vec2(dy, -dx) + 1e-6);
     }
 
     vec3 hsl2rgb(float h, float s, float l) {
         float c = (1.0 - abs(2.0*l - 1.0)) * s;
         float hp = h / 60.0;
         float x = c * (1.0 - abs(mod(hp, 2.0) - 1.0));
-        vec3 col;
+        vec3 col = vec3(0.0);
         if (0.0 <= hp && hp < 1.0) col = vec3(c, x, 0.0);
         else if (1.0 <= hp && hp < 2.0) col = vec3(x, c, 0.0);
         else if (2.0 <= hp && hp < 3.0) col = vec3(0.0, c, x);
         else if (3.0 <= hp && hp < 4.0) col = vec3(0.0, x, c);
         else if (4.0 <= hp && hp < 5.0) col = vec3(x, 0.0, c);
         else col = vec3(c, 0.0, x);
-        float m = l - 0.5 * c;
-        return col + vec3(m);
+        return col + vec3(l - 0.5 * c);
     }
 
-    float grain(vec2 uv){
-        return (hash(uv * 1431.7 + floor(u_time * 17.0)) - 0.5);
-    }
-
-    float starShape(vec2 d, float size, float id){
-        float r = length(d);
-        float disk = smoothstep(size, size * 0.4, r);
-        float corona = exp(-r * 45.0);
-        float ang = atan(d.y, d.x);
-        float spikes = pow(max(0.0, cos(ang * 8.0 + id)), 20.0) 
-                     * smoothstep(size*0.8, size*0.15, r);
-        return clamp(disk + corona*0.7 + spikes*0.6, 0.0, 1.0);
-    }
-
-    vec3 bloom(vec2 uv, vec3 base){
-        float r = 1.0 / min(u_resolution.x, u_resolution.y);
-        vec3 acc = base * 0.7;
-        float w = 0.0;
-
-        for(int i=0;i<8;i++){
-            float a = float(i) * 0.785398;
-            vec2 dir = vec2(cos(a), sin(a));
-            float dist = 1.5 + float(i) * 0.65;
-            vec3 tap = base * exp(-dist * 0.35);
-            acc += tap;
-            w += 1.0;
-        }
-        return acc / (w + 1.0);
-    }
-
-    void main(){
-        vec2 res = u_resolution;
-        vec2 uv = (v_uv * res - 0.5 * res) / min(res.x, res.y);
-
+    void main() {
+        vec2 uv = (v_uv - 0.5) * vec2(u_res.x/u_res.y, 1.0);
+        uv *= (2.0 - u_zoom); 
+        
+        vec3 accColor = vec3(0.0);
         float t = u_time * 0.1;
 
-        vec2 p = uv * 1.5;
-        vec2 flow = curlNoise(p * 0.8 + t * 0.2) * u_flow * 0.35;
-        vec2 pA = p + flow + fbm(p * 0.5 + t * 0.1) * 0.2;
-
-        float n1 = fbm(pA * 1.1 - t * 0.03);
-        float n2 = fbm(pA * 3.0 + t * 0.2);
-        float n3 = fbm(pA * 7.0 - t * 0.5);
-
-        float baseDensity = n1 * 0.8 + n2 * 0.4;
-        float detail = n3 * 0.3;
-
-        float N = clamp(baseDensity + detail, 0.0, 1.35);
-
-        float hue1 = mod(u_hueBase + N * 140.0, 360.0);
-        float hue2 = mod(u_hueBase + u_colorBandShift + N * 200.0, 360.0);
+        float maxL = clamp(u_layers, 1.0, 5.0);
         
-        vec3 col1 = hsl2rgb(hue1, 0.75, smoothstep(0.1,0.8,N) * 0.55 + 0.15);
-        vec3 col2 = hsl2rgb(hue2, 0.7,  smoothstep(0.2,0.9,N*n2) * 0.5 + 0.1);
+        for(float i = 0.0; i < 5.0; i++) {
+            if(i >= maxL) break;
 
-        vec3 neb = mix(col1, col2, u_bandMix);
+            float layerFactor = 1.0 + i * 0.5;
+            float flowAngle = t * u_rotFlow * (1.0/(i+1.0)); 
+            vec2 p = rot(flowAngle) * uv;
+            p += vec2(t * u_flow * 0.2 * layerFactor, t * u_flow * 0.1);
+            
+            vec2 noiseUV = p * u_nebulaScale * layerFactor;
+            float n = fbm(noiseUV + fbm(noiseUV + t*0.2));
+            
+            float mask = smoothstep(u_voidCut, 1.0, n);
+            float detail = noise(noiseUV * u_detailScale + t);
+            mask *= (0.5 + 0.5 * detail);
+            
+            float activeHue = mod(u_hueBase + (u_time * u_hueSpeed * 10.0) + (i * u_colorSpread), 360.0);
+            vec3 layerCol = hsl2rgb(activeHue, 0.7, 0.5);
+            
+            float alpha = mask * pow(u_layerDecay, i); 
+            accColor += layerCol * alpha * u_brightness;
+        }
 
-        float blob = exp(-dot(uv * 0.8, uv * 0.8) * 1.4);
-        neb += vec3(1.0,0.75,1.0) * blob * 0.45;
-
-        vec3 stars = vec3(0.0);
-        vec2 grid = v_uv * vec2(900.0,650.0);
+        vec2 starUV = v_uv * rot(t*0.05);
+        vec2 grid = starUV * 600.0;
         vec2 id = floor(grid);
-        vec2 gv = fract(grid) - 0.5;
-        float rseed = hash(id + vec2(7.3,3.8));
-        float threshold = 1.0 - u_starDensity * 0.98;
-
-        if(rseed > threshold){
-            vec2 spr = vec2(hash(id+vec2(1.2,9.3)), hash(id+vec2(2.6,3.1))) - 0.5;
-            vec2 d = gv - spr;
-            float size = 0.001 + 0.004 * hash(id + vec2(4.1,2.2));
-            float idf = hash(id + vec2(5.5, 2.1)) * 6.28318;
-            float tw = 0.6 + 0.4 * sin(u_time * (1.0 + u_twinkle*2.0) * (1.0 + hash(id)));
-            float st = starShape(d, size, idf) * tw;
-
-            vec3 sc = mix(vec3(1.0,0.95,0.85), vec3(0.75,0.85,1.0), hash(id+vec2(6.3,9.1)));
-            stars += sc * st * 1.2;
+        if(hash(id) > (1.0 - u_starDensity * 0.1)) {
+             float val = hash(id + 12.0);
+             float flicker = 0.5 + 0.5 * sin(u_time * u_starDensity * 20.0 * val);
+             accColor += vec3(val) * flicker;
         }
 
-        vec3 color = neb + stars;
-
-        vec3 bloomCol = bloom(v_uv, color) * u_bloomStrength;
-        color += bloomCol;
-
-        vec3 finalCol = vec3(color.r, color.g*0.98, color.b*1.02);
-
-        finalCol = 1.0 - exp(-finalCol * 1.5);
-        finalCol = pow(finalCol, vec3(0.9));
-
-        float vig = smoothstep(0.8, 0.3, length(uv));
-        finalCol *= mix(1.0, 0.65, vig);
-
-        finalCol += grain(v_uv * res.xy) * u_grain * 0.06;
-
-        outColor = vec4(finalCol, 1.0);
-    }`;
-
-    function compileShader(gl, src, type){
-      const s = gl.createShader(type);
-      gl.shaderSource(s, src);
-      gl.compileShader(s);
-      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-        console.error('CosmicDream shader compile error', gl.getShaderInfoLog(s));
-      }
-      return s;
+        accColor = pow(accColor, vec3(u_contrast));
+        outColor = vec4(accColor, 1.0);
     }
-    function createProgram(gl, vs, fs){
-      const v = compileShader(gl, vs, gl.VERTEX_SHADER);
-      const f = compileShader(gl, fs, gl.FRAGMENT_SHADER);
-      const p = gl.createProgram();
-      gl.attachShader(p, v); gl.attachShader(p, f);
-      gl.bindAttribLocation(p, 0, 'a_pos');
-      gl.linkProgram(p);
-      if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
-        console.error('CosmicDream program link error', gl.getProgramInfoLog(p));
+    `;
+
+    // --- WEBGL SETUP ---
+    function initGL() {
+      if (gl) return;
+      canvas = document.createElement('canvas');
+      canvas.className = `${PLUGIN_PREFIX}-bgCanvas`;
+      document.body.prepend(canvas);
+      
+      gl = canvas.getContext('webgl2', { alpha: true });
+      if (!gl) return console.error('WebGL2 required');
+
+      const vs = gl.createShader(gl.VERTEX_SHADER);
+      gl.shaderSource(vs, V_SHADER); gl.compileShader(vs);
+      const fs = gl.createShader(gl.FRAGMENT_SHADER);
+      gl.shaderSource(fs, F_SHADER); gl.compileShader(fs);
+      
+      if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
+        console.error(gl.getShaderInfoLog(fs));
       }
-      return p;
-    }
 
-    program = createProgram(gl, vsSource, fsSource);
-    gl.useProgram(program);
-    vao = gl.createVertexArray(); gl.bindVertexArray(vao);
-    const vbo = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
-    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-
-    u_resolution = gl.getUniformLocation(program, 'u_resolution');
-    u_time = gl.getUniformLocation(program, 'u_time');
-    u_hueBase = gl.getUniformLocation(program, 'u_hueBase');
-    u_starDensity = gl.getUniformLocation(program, 'u_starDensity');
-    u_twinkle = gl.getUniformLocation(program, 'u_twinkle');
-    u_flow = gl.getUniformLocation(program, 'u_flow');
-    u_grain = gl.getUniformLocation(program, 'u_grain');
-    u_bloomStrength = gl.getUniformLocation(program, 'u_bloomStrength');
-    u_colorBandShift = gl.getUniformLocation(program, 'u_colorBandShift');
-    u_bandMix = gl.getUniformLocation(program, 'u_bandMix');
-
-    function resizeGL(){
-      const dpr = Math.max(1, window.devicePixelRatio || 1);
-      const w = Math.floor(canvas.clientWidth * dpr), h = Math.floor(canvas.clientHeight * dpr);
-      if (canvas.width !== w || canvas.height !== h) {
-        canvas.width = w; canvas.height = h;
-        gl.viewport(0, 0, w, h);
-      }
-    }
-    startTime = performance.now();
-    function render(now){
-      if (!renderRunning) { rafId = requestAnimationFrame(render); return; }
-      resizeGL();
-      const t = (now - startTime) / 1000;
+      program = gl.createProgram();
+      gl.attachShader(program, vs); gl.attachShader(program, fs);
+      gl.linkProgram(program);
       gl.useProgram(program);
-      gl.uniform2f(u_resolution, canvas.width, canvas.height);
-      gl.uniform1f(u_time, t);
-      gl.uniform1f(u_hueBase, (config.hueBase + t * 6.0) % 360.0);
-      gl.uniform1f(u_starDensity, config.starDensity);
-      gl.uniform1f(u_twinkle, config.twinkle);
-      gl.uniform1f(u_flow, config.flow);
-      gl.uniform1f(u_grain, config.grain);
-      gl.uniform1f(u_bloomStrength, config.bloomStrength);
-      gl.uniform1f(u_colorBandShift, config.colorBandShift);
-      gl.uniform1f(u_bandMix, config.bandMix);
-      gl.bindVertexArray(vao);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-      rafId = requestAnimationFrame(render);
-    }
-    rafId = requestAnimationFrame(render);
 
-    // expose runtime control
-    global.CosmicDream = global.CosmicDream || {};
-    Object.assign(global.CosmicDream, {
-      setHue(h){ if (gl) gl.useProgram(program), gl.uniform1f(u_hueBase, h % 360); config.hueBase = h; },
-      setStarDensity(d){ config.starDensity = Math.max(0, Math.min(1, d)); if (gl) gl.useProgram(program), gl.uniform1f(u_starDensity, config.starDensity); },
-      setTwinkle(tw){ config.twinkle = tw; if (gl) gl.useProgram(program), gl.uniform1f(u_twinkle, tw); },
-      pause(){ renderRunning = false; },
-      resume(){ renderRunning = true; }
-    });
-
-    // save references for pause/resume on visibility change
-    if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', () => {
-        if (document.hidden) global.CosmicDream.pause();
-        else global.CosmicDream.resume();
+      const buf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]), gl.STATIC_DRAW);
+      const loc = gl.getAttribLocation(program, 'a_position');
+      gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+      
+      CONTROL_PARAMS.forEach(p => {
+        uniformLocations[p.key] = gl.getUniformLocation(program, 'u_' + p.key);
       });
+      uniformLocations.u_res = gl.getUniformLocation(program, 'u_res');
+      uniformLocations.u_time = gl.getUniformLocation(program, 'u_time');
+      
+      resize();
+      window.addEventListener('resize', resize);
+      render();
     }
-  } // end initGL
 
-  /* =========================
-     Dream tree node animation engine
-     ========================= */
+    function resize() {
+      if(!canvas) return;
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      gl.viewport(0, 0, canvas.width, canvas.height);
+    }
 
-  const ENGINE_CONFIG = {
-    stepSibling: 25,
-    stepDepth: 40,
-    speedFill: config.speedFill,
-    speedBorder: config.speedBorder
-  };
+    function render(now) {
+      if (isPaused || !gl) return;
+      animationFrameId = requestAnimationFrame(render);
+      const t = (now - startTime) * 0.001;
 
-  function clearNodes(){
-    animatedNodes.length = 0;
-    loopStarted = false;
-    lastTimestamp = null;
-  }
+      gl.uniform2f(uniformLocations.u_res, canvas.width, canvas.height);
+      gl.uniform1f(uniformLocations.u_time, t);
 
-  function applyPhysics(element, parentHue = 0, depth = 0){
-    if (!element) return;
-    const inner = element.matches && element.matches(config.selectorNodeInner) ? element : element.querySelector(config.selectorNodeInner);
-    if (!inner) return;
-
-    // convert stored ranges to deg/sec values
-    const fillSpeedPerSecond = rand(ENGINE_CONFIG.speedFill.min, ENGINE_CONFIG.speedFill.max) * 60;
-    const borderSpeedPerSecond = rand(ENGINE_CONFIG.speedBorder.min, ENGINE_CONFIG.speedBorder.max) * 60;
-
-    const physics = {
-      element: inner,
-      fill: { val: ((parentHue % 360) + 360) % 360, speed: fillSpeedPerSecond },
-      border: { val: (((parentHue + 180) % 360) + 360) % 360, speed: borderSpeedPerSecond }
-    };
-
-    const floatDelay = Math.random() * 2 + depth * 0.12;
-    inner.style.setProperty('--cd-float-delay', `${floatDelay}s`);
-    // ensure CSS variables exist
-    inner.style.setProperty('--hue-fill', physics.fill.val.toFixed(1));
-    inner.style.setProperty('--hue-border', physics.border.val.toFixed(1));
-
-    animatedNodes.push(physics);
-
-    const childrenContainer = element.querySelector('.' + PLUGIN_PREFIX + '-children');
-    if (childrenContainer) {
-      const children = Array.from(childrenContainer.children).filter(c => c.classList && c.classList.contains(PLUGIN_PREFIX + '-hue-node'));
-      children.forEach((child, index) => {
-        const siblingShift = index * ENGINE_CONFIG.stepSibling;
-        const depthShift = ENGINE_CONFIG.stepDepth;
-        const childStartHue = ((parentHue + siblingShift + depthShift) % 360 + 360) % 360;
-        applyPhysics(child, childStartHue, depth + 1);
+      CONTROL_PARAMS.forEach(p => {
+        gl.uniform1f(uniformLocations[p.key], config[p.key]);
       });
-    }
-  }
+      
+      hueNodes.forEach(node => {
+        node.hueCurrent = (node.hueCurrent + node.speed * 0.5) % 360;
+        node.el.style.setProperty('--hue-border', node.hueCurrent.toFixed(1));
+      });
 
-  function discoverAndApply(root){
-    clearNodes();
-    const topNodes = Array.from(root.children).filter(c => c.classList && c.classList.contains(PLUGIN_PREFIX + '-hue-node'));
-    topNodes.forEach(node => applyPhysics(node, config.hueBase, 0));
-
-    if (!loopStarted) {
-      loopStarted = true;
-      lastTimestamp = performance.now();
-      requestAnimationFrame(gameLoop);
-    }
-  }
-
-  function gameLoop(timestamp){
-    if (lastTimestamp === null) lastTimestamp = timestamp;
-    const dt = Math.max(0, (timestamp - lastTimestamp) / 1000);
-    lastTimestamp = timestamp;
-
-    for (let i = 0; i < animatedNodes.length; i++) {
-      const node = animatedNodes[i];
-      node.fill.val = node.fill.val + node.fill.speed * dt;
-      node.border.val = node.border.val + node.border.speed * dt;
-
-      const fillHue = ((node.fill.val % 360) + 360) % 360;
-      const borderHue = ((node.border.val % 360) + 360) % 360;
-
-      node.element.style.setProperty('--hue-fill', fillHue.toFixed(1));
-      node.element.style.setProperty('--hue-border', borderHue.toFixed(1));
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
 
-    requestAnimationFrame(gameLoop);
-  }
-
-  /* =========================
-     Wrap existing page content (optional)
-     ========================= */
-
-  function wrapPageContent(card) {
-    if (!config.wrapBody) return;
-    if (!document.body) return;
-
-    // selectors we don't want to move
-    const preserveSelectors = [
-      'canvas.' + PLUGIN_PREFIX + '-bgCanvas',
-      '.' + PLUGIN_PREFIX + '-spotlight',
-      '.' + PLUGIN_PREFIX + '-card-container',
-      'script'
-    ];
-    const preserves = Array.from(document.body.querySelectorAll(preserveSelectors.join(',')));
-    const preserveSet = new Set(preserves);
-    // current script should be preserved too
-    if (document.currentScript) preserveSet.add(document.currentScript);
-
-    // collect direct children of body (snapshot)
-    const bodyChildren = Array.from(document.body.childNodes);
-
-    // create an inner content wrapper
-    const inner = document.createElement('div');
-    inner.className = PLUGIN_PREFIX + '-content';
-    inner.style.minHeight = '1px';
-
-    // We'll use a fragment to batch-move nodes
-    const frag = document.createDocumentFragment();
-
-    // Build list of nodes safe-to-move (skip any node that is the card,
-    // that contains the card, or that is in preserveSet)
-    const toMove = bodyChildren.filter(node => {
-      // never move the card itself
-      if (node === card) return false;
-      // never move preserved nodes (canvas/spotlight/scripts)
-      if (node.nodeType === Node.ELEMENT_NODE && preserveSet.has(node)) return false;
-      // if node contains the card (node is an ancestor of card), skip it
-      if (node.nodeType === Node.ELEMENT_NODE && node.contains(card)) return false;
-      // if the card contains node (shouldn't happen for direct children) skip (defensive)
-      if (node.nodeType === Node.ELEMENT_NODE && card.contains(node)) return false;
-      // Otherwise candidate for moving
-      return true;
-    });
-
-    // Move them into the fragment, but guard with try/catch to avoid DOMExceptions
-    toMove.forEach(node => {
-      try {
-        frag.appendChild(node);
-      } catch (err) {
-        // If any node throws (rare), skip it but log for debugging
-        console.warn('CosmicDream: skipping node during wrap (error append):', node, err);
-      }
-    });
-
-    // Finally attach the frag into inner and inner into card.
-    // This is atomic-ish and avoids ancestor/descendant issues.
-    if (frag.childNodes.length > 0) {
-      inner.appendChild(frag);
-      try {
-        card.appendChild(inner);
-      } catch (err) {
-        // Extra defensive: if appending inner fails, put its children directly into card
-        console.warn('CosmicDream: failed to append inner wrapper, falling back to direct append', err);
-        while (inner.firstChild) {
-          card.appendChild(inner.firstChild);
-        }
-      }
-    } else {
-      // Nothing to move - just append an empty inner so structure is predictable
-      card.appendChild(inner);
-    }
-  }
-
-  /* =========================
-     Initialization & Observers
-     ========================= */
-
-  function initOnce() {
-    const injected = injectUI();
-    if (!injected) return;
-    canvas = injected.canvas;
-    const card = injected.card;
-
-    // optionally wrap content
-    if (config.wrapBody) wrapPageContent(card);
-
-    // if there's an existing .cd-demo-card or demo tree already in DOM, prefer it as content root
-    const candidateRoot = card.querySelector('#dreamTree') || card.querySelector('.' + PLUGIN_PREFIX + '-tree') || document.querySelector('#dreamTree') || document.querySelector('.' + PLUGIN_PREFIX + '-tree');
-    const rootForNodes = candidateRoot || card.querySelector('.' + PLUGIN_PREFIX + '-tree') || card;
-
-    initGL();
-
-    // ensure node elements inside the container have proper tabindex & aria attributes if missing
-    const nodes = rootForNodes.querySelectorAll(config.selectorNodeInner);
-    nodes.forEach((n, idx) => {
-      if (!n.hasAttribute('tabindex')) n.setAttribute('tabindex', '0');
-      if (!n.hasAttribute('role')) n.setAttribute('role', 'listitem');
-    });
-
-    // apply engine to container root
-    discoverAndApply(rootForNodes);
-
-    // Intersection observer: pause background when card mostly off-screen (save perf)
-    try {
-      const observer = new IntersectionObserver(entries => {
-        entries.forEach(e=>{
-          if (!e.isIntersecting && !visibilityPaused) {
-            visibilityPaused = true;
-            if (global.CosmicDream && global.CosmicDream.pause) global.CosmicDream.pause();
-          } else if (e.isIntersecting && visibilityPaused) {
-            visibilityPaused = false;
-            if (global.CosmicDream && global.CosmicDream.resume) global.CosmicDream.resume();
-          }
+    function init() {
+      global.CosmicDream = global.CosmicDream || {};
+      if(global.CosmicDream.active) return;
+      global.CosmicDream.active = true;
+      
+      initGL();
+      createHUD();
+      
+      document.querySelectorAll('.cd-node-inner').forEach(el => {
+        hueNodes.push({
+          el: el,
+          hueCurrent: rand(0, 360),
+          speed: rand(0.2, 1.0)
         });
-      }, { threshold: 0.02 });
-      observer.observe(card);
-    } catch (err) { /* ignore */ }
+      });
 
-    // simple resize handler to keep canvas sized to viewport
-    function resizeCanvas() {
-      if (!canvas) return;
-      canvas.style.width = '100%';
-      canvas.style.height = '100%';
-      // for WebGL we rely on internal resize logic in render
+      const obs = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+           isPaused = !e.isIntersecting;
+           if(!isPaused) render(performance.now());
+        });
+      });
+      obs.observe(canvas);
     }
-    window.addEventListener('resize', resizeCanvas, { passive: true });
 
-    // expose few runtime helpers on global
-    global.CosmicDream = global.CosmicDream || {};
-    Object.assign(global.CosmicDream, {
-      init: initOnce,
-      pause(){ if (global.CosmicDream && global.CosmicDream.pause) global.CosmicDream.pause(); },
-      resume(){ if (global.CosmicDream && global.CosmicDream.resume) global.CosmicDream.resume(); },
-      discover(rootEl){ discoverAndApply(rootEl || rootForNodes); },
-      config // export current config
-    });
-  }
-
-  // allow user to call init manually
-  if (config.autoInit) {
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initOnce);
-    } else {
-      setTimeout(initOnce, 6); // tiny delay so page scripts can register if needed
+    if (DEFAULTS.autoInit) {
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+      else setTimeout(init, 10);
     }
-  } else {
-    // still expose init
-    global.CosmicDream = global.CosmicDream || {};
-    global.CosmicDream.init = initOnce;
-    global.CosmicDream.config = config;
-  }
 
-  // allow dynamic config update
-  global.CosmicDreamConfig = config;
-
-})(window);
+  })(window);
 </script>
 </body>
 </html>
