@@ -161,7 +161,8 @@ export class StarFieldGenerator {
 
             pushId(cellIndex, localIds, localOffsets, localCounts, starId);
 
-            const spillRadius = Math.min(2, Math.ceil(size * haloScale * 4.0));
+            const worldToCell = layer.scale > 0 ? layer.cellsPerAxis / layer.scale : 1;
+            const spillRadius = Math.min(2, Math.ceil(size * haloScale * worldToCell * 4.0));
             if (spillRadius > 0) {
               for (let dy = -spillRadius; dy <= spillRadius; dy++) {
                 for (let dx = -spillRadius; dx <= spillRadius; dx++) {

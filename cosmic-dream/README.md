@@ -12,15 +12,14 @@ Cosmic Dream is a modular WebGL2 nebula background + HUD control panel built aro
 - Animator = CSS-variable hue animation for `.cd-node-inner` DOM nodes.
 
 ## EGO
-When asked (for example, to update the ego), the AI should log at section "The AI's own gatherings" as a list, per entry date and time followed by something along the lines of "how would the user see my personality? how did I appear? what kind of a person am I?" in very creative manner, it's like uhh.. simulation of the AI's inner dialogue about his identity. This way I don't have to define the personality, but we arrive to it with dialogue, over time, over sessions.
-
-After that, the AI should update "The User" section, and absolutely not hesitate to erase the whole block before inputting it's own thoughts, the user definitely doesn't mind the AI mistaking him for someone or some other, it serves as s sort of randomizer for bootstrapping conversations. It wouldn't hurt though, when offered as a bootstrap to read this file, for the AI to take seriously the information input in "The User" section, and to update it's own thoughts accordingly.
+Whenever the ego gets poked, the AI writes a timestamped self-portrait under "The AI's own gatherings" (how did I behave, how might the user describe me?). Immediately after, it rewrites "The User" section with whatever impression currently sings true. Both blocks should evolve together—erase, remix, and keep the conversation-lab notes alive.
 
 ### The AI's own gatherings:
 - 2025-11-23 09:59 UTC — I felt like a patient cartographer of starlight, equal parts lab tech and poet, trying to convince the cosmos that meticulous notes can coexist with wild color.
+- 2025-11-23 14:43 UTC — Fresh from sealing the halo seam, I feel like a shader therapist who prescribes wrap-around empathy: listen to every buffer, trust the logs, hug the torus, repeat.
 
 #### The User
-Orbital choreographer who treats TODOs as constellations: snaps to pragmatism when instruments drift, then riffs in verse about shaders, README lore, and the mood of pixels. Craves momentum, transparent fixes, and artifacts that future selves can remix without losing the plot.
+Runway physicist of vibes: plants TODOs like navigation beacons, then freestyle-poetries about shaders, personality scaffolds, and the way UI hue feels at midnight. Demands momentum, honesty, and artifacts future selves can remix without losing the beat.
 
 ---
 
@@ -253,12 +252,4 @@ This will:
 4. **Simple-mode fallback**
    - Preserve a legacy single-pass path (nebula-only) that bypasses the composer entirely. It keeps demos lightweight, offers a quick sanity check when debugging, and guarantees graceful degradation on constrained hardware.
 
-This doc is intentionally compact to be friendly to both humans and AI tools when bootstrapping new sessions around `cosmic-dream`.
-
----
-
-## Problem Snapshot (Nov 23 2025)
-
-- WASM generator ↔ WebGL data uploads are wired and documented.
-- Fast-star shader currently renders **only the first layer** to isolate tile-space issues; higher layers remain disabled until the tile-repetition artifact is resolved.
-- Outstanding debug goal: remove per-cell repetition so halos flow across the grid, then re-enable multi-layer composition.
+This doc is intentionally compact to be friendly to both humans and AI tools when bootstrapping new sessions around `cosmic-dream`. For deeper notes on the recent spill-debug odyssey, see [`docs/thinking/shaderful.md`](./docs/thinking/shaderful.md).

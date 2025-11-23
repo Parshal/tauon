@@ -37,9 +37,13 @@ uniform float u_starLayerInfoHeight;
 uniform float u_starCellCount;
 uniform float u_starLayerCount;
 uniform float u_starCount;
+uniform float u_debugCellLayer;
+uniform float u_debugCellX;
+uniform float u_debugCellY;
+uniform float u_debugCellEnabled;
 
 const int MAX_LAYERS = 8;
-const int MAX_CELL_STAR_LOOP = 64;
+const int MAX_CELL_STAR_LOOP = 256;
 const float TEXELS_PER_STAR = 3.0;
 
 float starProfile(float dist, float baseRadius, float softness) {
@@ -50,6 +54,12 @@ float starProfile(float dist, float baseRadius, float softness) {
     float haloRadius = safeRadius * mix(1.8, 4.5, softmix);
     float halo = 1.0 / (1.0 + pow(dist / (haloRadius + 0.0001), 2.6));
     return mix(core, halo, softmix);
+}
+
+vec2 wrapLayerSpace(vec2 pos, float scale) {
+    float safeScale = max(scale, 0.0001);
+    float halfScale = safeScale * 0.5;
+    return mod(pos + halfScale, safeScale) - halfScale;
 }
 
 vec4 sampleGlowProfile(float glowNorm, bool hero) {
@@ -155,7 +165,7 @@ vec3 shadeStar(
     float worldCellSize = layerScale * invCells;
     float baseRadius = max(0.00015, star.size * worldCellSize);
     vec2 starPos = star.position;
-    vec2 delta = fragLocal - starPos;
+    vec2 delta = wrapLayerSpace(fragLocal - starPos, layerScale);
     float dist = length(delta);
     float profile = starProfile(dist, baseRadius, softness) * star.coreScale * layerWeight;
     float haloRadius = max(baseRadius * star.haloScale, baseRadius * 1.1) + 0.0003;
@@ -196,7 +206,9 @@ void accumulateRange(
 }
 
 void main() {
-    vec2 uv = (v_uv - 0.5) * vec2(u_res.x / max(u_res.y, 1.0), 1.0);
+    float maxDim = max(max(u_res.x, u_res.y), 1.0);
+    vec2 aspect = vec2(u_res.x, u_res.y) / maxDim;
+    vec2 uv = (v_uv - 0.5) * aspect;
     float zoomAtten = mix(0.4, 1.8, clamp(2.2 - u_zoom, 0.0, 1.5));
     uv *= zoomAtten;
 
@@ -206,6 +218,8 @@ void main() {
     float glowBoost = 1.0 + u_starFastGlow * 0.8;
     float glowMix = clamp(u_starFastGlow, 0.0, 1.0);
     int totalLayers = max(1, int(floor(u_starLayerCount + 0.5)));
+
+    bool debugActive = u_debugCellEnabled > 0.5;
 
     for (int layer = 0; layer < MAX_LAYERS; ++layer) {
         if (layer >= totalLayers) break;
@@ -217,16 +231,18 @@ void main() {
         float cellOffset = layerInfo.w;
 
         vec2 layerPos = uv * layerScale;
-        vec2 normalized = layerPos / layerScale + 0.5;
-        vec2 tile = floor(normalized);
-        vec2 localCoord = clamp(normalized - tile, 0.0, 0.9999);
-        vec2 clampedNorm = localCoord;
-        vec2 tileWorld = tile * layerScale;
-        vec2 fragLocal = layerPos - tileWorld;
+        vec2 wrappedLayerPos = wrapLayerSpace(layerPos, layerScale);
+        vec2 normalized = wrappedLayerPos / layerScale + 0.5;
+        vec2 clampedNorm = clamp(normalized, 0.0, 0.9999);
         vec2 cellFloat = clampedNorm * cellsPerAxis;
         ivec2 cell = ivec2(floor(cellFloat));
         float cellIndex = cellOffset + float(cell.y) * cellsPerAxis + float(cell.x);
         if (cellIndex < 0.0 || cellIndex >= u_starCellCount) continue;
+
+        bool isDebugCell = debugActive
+            && layer == int(floor(u_debugCellLayer + 0.5))
+            && cell.x == int(floor(u_debugCellX + 0.5))
+            && cell.y == int(floor(u_debugCellY + 0.5));
 
         float layerLerp = totalLayers > 1 ? float(layer) / float(totalLayers - 1) : 0.0;
         float layerWeight = mix(1.1, 0.32, layerLerp);
@@ -239,7 +255,7 @@ void main() {
             u_starLocalWidth,
             u_starLocalHeight,
             localInfo,
-            fragLocal,
+            wrappedLayerPos,
             layer,
             layerScale,
             invCells,
@@ -256,7 +272,7 @@ void main() {
             u_starSpillWidth,
             u_starSpillHeight,
             spillInfo,
-            fragLocal,
+            wrappedLayerPos,
             layer,
             layerScale,
             invCells,
@@ -267,6 +283,12 @@ void main() {
             glowBoost,
             accum
         );
+
+        if (isDebugCell) {
+            vec3 tint = vec3(0.75, 0.2, 0.95);
+            float gridMix = 0.65;
+            accum = mix(accum, accum + tint * 0.6, gridMix);
+        }
     }
 
     accum *= u_starFastBright;

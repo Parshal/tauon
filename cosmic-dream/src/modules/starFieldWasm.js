@@ -86,6 +86,8 @@ export class WasmStarFieldGenerator {
     const starCount = this.exports.get_star_count();
     const localIdCount = this.exports.get_local_id_count();
     const spillIdCount = this.exports.get_spill_id_count();
+    const localDropCount = this.exports.get_local_drop_count?.() ?? 0;
+    const spillDropCount = this.exports.get_spill_drop_count?.() ?? 0;
 
     const descriptors = copyFloat32(
       this.memory,
@@ -135,11 +137,13 @@ export class WasmStarFieldGenerator {
         offsets: localOffsets,
         counts: localCounts,
         ids: localIds,
+        dropCount: localDropCount,
       },
       spill: {
         offsets: spillOffsets,
         counts: spillCounts,
         ids: spillIds,
+        dropCount: spillDropCount,
       },
     };
   }

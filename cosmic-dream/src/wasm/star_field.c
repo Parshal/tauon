@@ -16,7 +16,8 @@ void *memset(void *dest, int value, size_t count) {
 #define MAX_STARS 20000
 #define MAX_STARS_PER_CELL 8
 #define MAX_CELLS (24 * 24 + 36 * 36 + 48 * 48 + 64 * 64)
-#define MAX_ID_LIST (MAX_STARS * 6)
+#define MAX_LOCAL_IDS MAX_STARS
+#define MAX_SPILL_IDS (MAX_STARS * 24)
 
 typedef struct {
     float scale;
@@ -35,13 +36,18 @@ static uint32_t local_offsets[MAX_CELLS];
 static uint32_t local_counts[MAX_CELLS];
 static uint32_t spill_offsets[MAX_CELLS];
 static uint32_t spill_counts[MAX_CELLS];
-static uint32_t local_ids[MAX_ID_LIST];
-static uint32_t spill_ids[MAX_ID_LIST];
+static uint32_t local_ids[MAX_LOCAL_IDS];
+static uint32_t spill_ids[MAX_SPILL_IDS];
+static uint32_t spill_targets[MAX_SPILL_IDS];
+static uint32_t spill_star_buffer[MAX_SPILL_IDS];
+static uint32_t spill_write_heads[MAX_CELLS];
 static float layer_info[MAX_LAYERS * LAYER_INFO_COMPONENTS];
 
 static uint32_t star_count = 0;
 static uint32_t local_id_count = 0;
 static uint32_t spill_id_count = 0;
+static uint32_t local_drop_count = 0;
+static uint32_t spill_drop_count = 0;
 static uint32_t layer_count = MAX_LAYERS;
 static uint32_t cell_count = 0;
 static uint8_t layer_info_initialized = 0;
@@ -101,16 +107,59 @@ static void push_id(
     uint32_t* count_ptr,
     uint32_t* offsets,
     uint32_t* counts,
-    uint32_t max_ids
+    uint32_t max_ids,
+    uint32_t* drop_counter
 ) {
     uint32_t current = *count_ptr;
-    if (current >= max_ids) return;
+    if (current >= max_ids) {
+        if (drop_counter) {
+            *drop_counter += 1;
+        }
+        return;
+    }
     if (counts[cell_index] == 0) {
         offsets[cell_index] = current;
     }
     ids[current] = value;
     counts[cell_index] += 1;
     *count_ptr = current + 1;
+}
+
+static void record_spill(uint32_t cell_index, uint32_t star_id) {
+    if (cell_index >= cell_count) {
+        return;
+    }
+    if (spill_id_count >= MAX_SPILL_IDS) {
+        spill_drop_count += 1;
+        return;
+    }
+    spill_targets[spill_id_count] = cell_index;
+    spill_star_buffer[spill_id_count] = star_id;
+    spill_counts[cell_index] += 1;
+    spill_id_count += 1;
+}
+
+static void finalize_spill_lists(void) {
+    uint32_t running = 0;
+    for (uint32_t i = 0; i < cell_count; i++) {
+        spill_offsets[i] = running;
+        spill_write_heads[i] = 0;
+        running += spill_counts[i];
+    }
+    if (running > MAX_SPILL_IDS) {
+        running = MAX_SPILL_IDS;
+    }
+    for (uint32_t i = 0; i < spill_id_count; i++) {
+        uint32_t cell_index = spill_targets[i];
+        if (cell_index >= cell_count) continue;
+        uint32_t head = spill_write_heads[cell_index];
+        uint32_t dest = spill_offsets[cell_index] + head;
+        spill_write_heads[cell_index] = head + 1;
+        if (dest < MAX_SPILL_IDS) {
+            spill_ids[dest] = spill_star_buffer[i];
+        }
+    }
+    spill_id_count = running;
 }
 
 static float compute_size(float seed, float softness) {
@@ -130,6 +179,8 @@ void generate_star_field(float density, float softness, float glow, float hero_b
     star_count = 0;
     local_id_count = 0;
     spill_id_count = 0;
+    local_drop_count = 0;
+    spill_drop_count = 0;
 
     float density_norm = clampf(density / 200.0f, 0.0f, 1.0f);
     float glow_mix = clampf(glow / 2.0f, 0.0f, 1.0f);
@@ -175,6 +226,8 @@ void generate_star_field(float density, float softness, float glow, float hero_b
                     float py = ((float)y + 0.5f + jitterY) / cellsF - 0.5f;
                     float worldX = px * spec.scale;
                     float worldY = py * spec.scale;
+                    float localX = 0.5f + jitterX;
+                    float localY = 0.5f + jitterY;
 
                     uint32_t descriptorOffset = star_count * STAR_DESCRIPTOR_FLOATS;
                     star_descriptors[descriptorOffset + 0] = worldX;
@@ -190,18 +243,25 @@ void generate_star_field(float density, float softness, float glow, float hero_b
                     star_descriptors[descriptorOffset + 10] = intensity;
                     star_descriptors[descriptorOffset + 11] = (float)isHero;
 
-                    push_id(cellIndex, star_count, local_ids, &local_id_count, local_offsets, local_counts, MAX_ID_LIST);
+                    push_id(cellIndex, star_count, local_ids, &local_id_count, local_offsets, local_counts, MAX_LOCAL_IDS, &local_drop_count);
 
-                    uint32_t spillRadius = (uint32_t)(size * haloScale * 4.0f);
-                    if (spillRadius > 2u) spillRadius = 2u;
-                    if (spillRadius > 0u) {
-                        for (int32_t dy = -(int32_t)spillRadius; dy <= (int32_t)spillRadius; dy++) {
-                            for (int32_t dx = -(int32_t)spillRadius; dx <= (int32_t)spillRadius; dx++) {
-                                if (dx == 0 && dy == 0) continue;
-                                uint32_t nx = wrap_index((int32_t)x + dx, cells);
-                                uint32_t ny = wrap_index((int32_t)y + dy, cells);
-                                uint32_t neighborIndex = cell_base + ny * cells + nx;
-                                push_id(neighborIndex, star_count, spill_ids, &spill_id_count, spill_offsets, spill_counts, MAX_ID_LIST);
+                    float worldToCell = spec.scale > 0.0f ? ((float)cells) / spec.scale : 1.0f;
+                    float rawSpill = size * haloScale * worldToCell * 4.0f;
+                    if (rawSpill > 0.0f) {
+                        if (rawSpill > 2.0f) rawSpill = 2.0f;
+                        int32_t spillRadius = (int32_t)rawSpill;
+                        if ((float)spillRadius < rawSpill) {
+                            spillRadius += 1;
+                        }
+                        if (spillRadius > 0) {
+                            for (int32_t dy = -spillRadius; dy <= spillRadius; dy++) {
+                                for (int32_t dx = -spillRadius; dx <= spillRadius; dx++) {
+                                    if (dx == 0 && dy == 0) continue;
+                                    uint32_t nx = wrap_index((int32_t)x + dx, cells);
+                                    uint32_t ny = wrap_index((int32_t)y + dy, cells);
+                                    uint32_t neighborIndex = cell_base + ny * cells + nx;
+                                    record_spill(neighborIndex, star_count);
+                                }
                             }
                         }
                     }
@@ -212,6 +272,8 @@ void generate_star_field(float density, float softness, float glow, float hero_b
         }
         cell_base += spec.cells * spec.cells;
     }
+
+    finalize_spill_lists();
 }
 
 __attribute__((export_name("get_star_count")))
@@ -227,6 +289,16 @@ uint32_t get_local_id_count(void) {
 __attribute__((export_name("get_spill_id_count")))
 uint32_t get_spill_id_count(void) {
     return spill_id_count;
+}
+
+__attribute__((export_name("get_local_drop_count")))
+uint32_t get_local_drop_count(void) {
+    return local_drop_count;
+}
+
+__attribute__((export_name("get_spill_drop_count")))
+uint32_t get_spill_drop_count(void) {
+    return spill_drop_count;
 }
 
 __attribute__((export_name("get_layer_count")))
