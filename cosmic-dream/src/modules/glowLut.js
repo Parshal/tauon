@@ -1,7 +1,10 @@
 const DEFAULT_SIZE = 32;
+const ROWS = 2;
 
-const REGULAR_PROFILE = { baseCore: 1.0, baseHalo: 1.3, coreAmp: 0.25, haloAmp: 0.6 };
-const HERO_PROFILE = { baseCore: 1.25, baseHalo: 2.0, coreAmp: 0.55, haloAmp: 1.35 };
+const REGULAR_PROFILE = { baseCore: 1.0, baseHalo: 1.25, coreAmp: 0.24, haloAmp: 0.55 };
+const HERO_PROFILE = { baseCore: 1.35, baseHalo: 2.05, coreAmp: 0.5, haloAmp: 1.15 };
+const REGULAR_SCATTER = { spanBase: 0.2, spanAmp: 1.1, weightBase: 0.35, weightAmp: 0.4 };
+const HERO_SCATTER = { spanBase: 0.6, spanAmp: 1.6, weightBase: 0.55, weightAmp: 0.35 };
 
 const wasmBytes = new Uint8Array([
   0x00,0x61,0x73,0x6d,0x01,0x00,0x00,0x00,
@@ -16,8 +19,13 @@ const clamp01 = v => Math.max(0, Math.min(1, v));
 async function compileGlowWeightWasm() {
   if (typeof WebAssembly === 'undefined') return null;
   try {
-    const instance = await WebAssembly.instantiate(wasmBytes.buffer);
-    return instance.exports.weight;
+    const { instance } = await WebAssembly.instantiate(wasmBytes.buffer);
+    const fn = instance?.exports?.weight;
+    if (typeof fn !== 'function') {
+      throw new Error('weight export missing');
+    }
+    console.info('[GlowLUT] using wasm weight helper');
+    return fn;
   } catch (err) {
     console.warn('[GlowLUT] wasm init failed, using JS weight fn.', err);
     return null;
@@ -25,15 +33,15 @@ async function compileGlowWeightWasm() {
 }
 
 function jsWeight(glow, hero) {
-  const bias = hero ? 1.3 : 0.7;
-  const spread = hero ? 1.7 : 1.05;
-  return bias + Math.pow(glow, hero ? 1.1 : 1.4) * spread;
+  const bias = hero ? 1.2 : 0.65;
+  const spread = hero ? 1.5 : 0.9;
+  return bias + Math.pow(glow, hero ? 1.08 : 1.35) * spread;
 }
 
 export class GlowLookupCompiler {
   constructor(size = DEFAULT_SIZE) {
     this.size = size;
-    this.table = new Float32Array(size * 4);
+    this.table = new Float32Array(size * ROWS * 4);
     this.weightFn = null;
     this.ready = this.init();
   }
@@ -44,26 +52,44 @@ export class GlowLookupCompiler {
   }
 
   rebuild(heroBias = 0.0, glowMax = 1.0) {
-    const heroRatio = clamp01(heroBias);
+    const heroMix = clamp01(heroBias);
+    const normScale = clamp01(glowMax);
     const step = 1 / Math.max(1, this.size - 1);
     for (let i = 0; i < this.size; i++) {
       const norm = clamp01(i * step);
-      const hero = norm > heroRatio;
-      const profile = hero ? HERO_PROFILE : REGULAR_PROFILE;
-      const weight = this.weightFn(norm * glowMax, hero);
-      const coreScale = profile.baseCore + profile.coreAmp * weight;
-      const haloScale = profile.baseHalo + profile.haloAmp * weight;
-      const dst = i * 4;
-      this.table[dst + 0] = norm;
-      this.table[dst + 1] = hero ? 1 : 0;
-      this.table[dst + 2] = coreScale;
-      this.table[dst + 3] = haloScale;
+      const regWeight = this.weightFn(norm * normScale, false);
+      const heroWeight = this.weightFn(norm * (0.65 + heroMix * 0.6), true);
+      const regCore = REGULAR_PROFILE.baseCore + REGULAR_PROFILE.coreAmp * regWeight;
+      const regHalo = REGULAR_PROFILE.baseHalo + REGULAR_PROFILE.haloAmp * regWeight;
+      const heroCore = HERO_PROFILE.baseCore + HERO_PROFILE.coreAmp * heroWeight;
+      const heroHalo = HERO_PROFILE.baseHalo + HERO_PROFILE.haloAmp * heroWeight;
+      const regSpan = REGULAR_SCATTER.spanBase + REGULAR_SCATTER.spanAmp * regWeight;
+      const heroSpan = HERO_SCATTER.spanBase + HERO_SCATTER.spanAmp * heroWeight;
+      const regWeightGain = REGULAR_SCATTER.weightBase + REGULAR_SCATTER.weightAmp * regWeight;
+      const heroWeightGain = HERO_SCATTER.weightBase + HERO_SCATTER.weightAmp * heroWeight;
+      const base = i * ROWS * 4;
+      this.table[base + 0] = regCore;
+      this.table[base + 1] = regHalo;
+      this.table[base + 2] = regSpan;
+      this.table[base + 3] = clamp01(regWeightGain);
+      this.table[base + 4] = heroCore;
+      this.table[base + 5] = heroHalo;
+      this.table[base + 6] = heroSpan;
+      this.table[base + 7] = clamp01(heroWeightGain);
     }
     return this.table;
   }
 
   getTexturePayload() {
     return this.table;
+  }
+
+  getSize() {
+    return this.size;
+  }
+
+  getRowCount() {
+    return ROWS;
   }
 }
 

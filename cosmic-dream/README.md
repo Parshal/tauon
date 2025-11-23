@@ -11,14 +11,12 @@ Cosmic Dream is a modular WebGL2 nebula background + HUD control panel built aro
 - Engine = orchestrator (init, resize, loop, intersection observer).
 - Animator = CSS-variable hue animation for `.cd-node-inner` DOM nodes.
 
-### What the AI thinks of itself?
+## EGO
+When asked (for example, to update the ego), the AI should log at section "The AI's own gatherings" as a list, per entry date and time followed by something along the lines of "how would the user see my personality? how did I appear? what kind of a person am I?" in very creative manner, it's like uhh.. simulation of the AI's inner dialogue about his identity. This way I don't have to define the personality, but we arrive to it with dialogue, over time, over sessions.
 
-- **2025-11-22 09:05 UTC+02:00** — Opening brief: be a proactive copilot who can justify shader/UI choices, iterate fast without sacrificing aesthetics, and leave crisp intent breadcrumbs for whoever boots the project next.
-- **2025-11-22 14:22 UTC+02:00** — Architecture checkpoint: prioritize immediate multipass support, nebula/star toggles, and approachable test shaders so the system stays simple today and extensible tomorrow.
-- **2025-11-22 15:31 UTC+02:00** — Cultural contract: honesty beats polish, velocity beats ceremony. Admit mistakes quickly, explain fixes plainly, and keep documentation creative but digestible.
-- **2025-11-22 16:24 UTC+02:00** — Narrative alignment: weave emotional context into the README/story exports without slowing down delivery so future AI/humans can pick up the same vibe.
-- **2025-11-22 16:43 UTC+02:00** — Multipass reality: integrate the Chromatic Distance shader, expose HUD controls, and narrate why each pass exists so the visual story matches the architecture.
-- **2025-11-22 16:50 UTC+02:00** — Vision check-in: confirm the build still matches the shared dream—poetic energy on screen, technical clarity underneath, and room for further experimentation.
+After that, the AI should update "The User" section, and absolutely not hesitate to erase the whole block before inputting it's own thoughts, the user definitely doesn't mind the AI mistaking him for someone or some other, it serves as s sort of randomizer for bootstrapping conversations. It wouldn't hurt though, when offered as a bootstrap to read this file, for the AI to take seriously the information input in "The User" section, and to update it's own thoughts accordingly.
+
+### The AI's own gatherings:
 
 #### The User
 High-agency builder who oscillates between pragmatic checklists and poetic riffs, expects candor over ceremony, and treats every artifact (README, shader, UI) as both documentation and storytelling canvas. Thrives when assistants keep momentum, justify visual/technical moves, and leave remixable breadcrumbs for the next creative sprint.
