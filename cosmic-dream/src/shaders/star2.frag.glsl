@@ -40,6 +40,7 @@ uniform float u_starCount;
 
 const int MAX_LAYERS = 8;
 const int MAX_CELL_STAR_LOOP = 64;
+const float TEXELS_PER_STAR = 3.0;
 
 float starProfile(float dist, float baseRadius, float softness) {
     float safeRadius = max(baseRadius, 0.0005);
@@ -67,20 +68,36 @@ float texCoord1D(float index, float width) {
     return (clamped + 0.5) / safeWidth;
 }
 
-vec2 readIndexValue(sampler2D tex, float width, float index) {
-    float u = texCoord1D(index, width);
-    return texture(tex, vec2(u, 0.5)).xy;
+vec2 texCoord2D(float index, float width, float height) {
+    float safeWidth = max(width, 1.0);
+    float safeHeight = max(height, 1.0);
+    float total = safeWidth * safeHeight;
+    float clamped = clamp(index, 0.0, total - 1.0);
+    float row = floor(clamped / safeWidth);
+    float column = clamped - row * safeWidth;
+    return vec2((column + 0.5) / safeWidth, (row + 0.5) / safeHeight);
 }
 
-float readIdValue(sampler2D tex, float width, float index) {
-    float u = texCoord1D(index, width);
-    return texture(tex, vec2(u, 0.5)).r;
+vec2 readIndexValue(sampler2D tex, float width, float height, float index) {
+    vec2 uv = texCoord2D(index, width, height);
+    return texture(tex, uv).xy;
+}
+
+float readIdValue(sampler2D tex, float width, float height, float index) {
+    vec2 uv = texCoord2D(index, width, height);
+    return texture(tex, uv).r;
 }
 
 vec4 readDescriptorRow(float starId, float row) {
-    float u = texCoord1D(starId, u_starDescriptorWidth);
+    float safeWidth = max(u_starDescriptorWidth, 1.0);
     float safeHeight = max(u_starDescriptorHeight, 1.0);
-    float v = texCoord1D(row, safeHeight);
+    float rowsPerBlock = TEXELS_PER_STAR;
+    float rowBlockCount = max(1.0, safeHeight / rowsPerBlock);
+    float blockIndex = floor(starId / safeWidth);
+    float column = starId - blockIndex * safeWidth;
+    float texRow = blockIndex * rowsPerBlock + clamp(row, 0.0, rowsPerBlock - 1.0);
+    float u = (column + 0.5) / safeWidth;
+    float v = (texRow + 0.5) / safeHeight;
     return texture(u_starDescriptorTex, vec2(u, v));
 }
 
@@ -120,8 +137,7 @@ StarSample loadStar(float starId) {
 
 vec3 shadeStar(
     float starId,
-    vec2 fragPos,
-    vec2 tileOffset,
+    vec2 fragLocal,
     int layerIndex,
     float layerScale,
     float invCells,
@@ -138,8 +154,8 @@ vec3 shadeStar(
     }
     float worldCellSize = layerScale * invCells;
     float baseRadius = max(0.00015, star.size * worldCellSize);
-    vec2 starPos = star.position + tileOffset;
-    vec2 delta = fragPos - starPos;
+    vec2 starPos = star.position;
+    vec2 delta = fragLocal - starPos;
     float dist = length(delta);
     float profile = starProfile(dist, baseRadius, softness) * star.coreScale * layerWeight;
     float haloRadius = max(baseRadius * star.haloScale, baseRadius * 1.1) + 0.0003;
@@ -156,9 +172,9 @@ vec3 shadeStar(
 void accumulateRange(
     sampler2D idTex,
     float idWidth,
+    float idHeight,
     vec2 indexInfo,
-    vec2 fragPos,
-    vec2 tileOffset,
+    vec2 fragLocal,
     int layerIndex,
     float layerScale,
     float invCells,
@@ -174,8 +190,8 @@ void accumulateRange(
     if (count <= 0.0) return;
     for (int i = 0; i < MAX_CELL_STAR_LOOP; ++i) {
         if (float(i) >= count) break;
-        float starId = readIdValue(idTex, idWidth, baseOffset + float(i));
-        accum += shadeStar(starId, fragPos, tileOffset, layerIndex, layerScale, invCells, layerWeight, softness, twinkle, glowMix, glowBoost);
+        float starId = readIdValue(idTex, idWidth, idHeight, baseOffset + float(i));
+        accum += shadeStar(starId, fragLocal, layerIndex, layerScale, invCells, layerWeight, softness, twinkle, glowMix, glowBoost);
     }
 }
 
@@ -193,6 +209,7 @@ void main() {
 
     for (int layer = 0; layer < MAX_LAYERS; ++layer) {
         if (layer >= totalLayers) break;
+        if (layer > 0) break;
         vec4 layerInfo = readLayerInfo(layer);
         float cellsPerAxis = max(1.0, layerInfo.x);
         float invCells = max(1.0 / cellsPerAxis, layerInfo.y);
@@ -202,9 +219,10 @@ void main() {
         vec2 layerPos = uv * layerScale;
         vec2 normalized = layerPos / layerScale + 0.5;
         vec2 tile = floor(normalized);
-        vec2 wrappedNorm = normalized - tile;
+        vec2 localCoord = clamp(normalized - tile, 0.0, 0.9999);
+        vec2 clampedNorm = localCoord;
         vec2 tileWorld = tile * layerScale;
-        vec2 clampedNorm = clamp(wrappedNorm, 0.0, 0.9999);
+        vec2 fragLocal = layerPos - tileWorld;
         vec2 cellFloat = clampedNorm * cellsPerAxis;
         ivec2 cell = ivec2(floor(cellFloat));
         float cellIndex = cellOffset + float(cell.y) * cellsPerAxis + float(cell.x);
@@ -213,15 +231,15 @@ void main() {
         float layerLerp = totalLayers > 1 ? float(layer) / float(totalLayers - 1) : 0.0;
         float layerWeight = mix(1.1, 0.32, layerLerp);
 
-        vec2 localInfo = readIndexValue(u_starLocalIndexTex, u_starLocalIndexWidth, cellIndex);
-        vec2 spillInfo = readIndexValue(u_starSpillIndexTex, u_starSpillIndexWidth, cellIndex);
+        vec2 localInfo = readIndexValue(u_starLocalIndexTex, u_starLocalIndexWidth, u_starLocalIndexHeight, cellIndex);
+        vec2 spillInfo = readIndexValue(u_starSpillIndexTex, u_starSpillIndexWidth, u_starSpillIndexHeight, cellIndex);
 
         accumulateRange(
             u_starLocalIdTex,
             u_starLocalWidth,
+            u_starLocalHeight,
             localInfo,
-            layerPos,
-            tileWorld,
+            fragLocal,
             layer,
             layerScale,
             invCells,
@@ -236,9 +254,9 @@ void main() {
         accumulateRange(
             u_starSpillIdTex,
             u_starSpillWidth,
+            u_starSpillHeight,
             spillInfo,
-            layerPos,
-            tileWorld,
+            fragLocal,
             layer,
             layerScale,
             invCells,

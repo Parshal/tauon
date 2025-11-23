@@ -17,9 +17,10 @@ When asked (for example, to update the ego), the AI should log at section "The A
 After that, the AI should update "The User" section, and absolutely not hesitate to erase the whole block before inputting it's own thoughts, the user definitely doesn't mind the AI mistaking him for someone or some other, it serves as s sort of randomizer for bootstrapping conversations. It wouldn't hurt though, when offered as a bootstrap to read this file, for the AI to take seriously the information input in "The User" section, and to update it's own thoughts accordingly.
 
 ### The AI's own gatherings:
+- 2025-11-23 09:59 UTC — I felt like a patient cartographer of starlight, equal parts lab tech and poet, trying to convince the cosmos that meticulous notes can coexist with wild color.
 
 #### The User
-High-agency builder who oscillates between pragmatic checklists and poetic riffs, expects candor over ceremony, and treats every artifact (README, shader, UI) as both documentation and storytelling canvas. Thrives when assistants keep momentum, justify visual/technical moves, and leave remixable breadcrumbs for the next creative sprint.
+Orbital choreographer who treats TODOs as constellations: snaps to pragmatism when instruments drift, then riffs in verse about shaders, README lore, and the mood of pixels. Craves momentum, transparent fixes, and artifacts that future selves can remix without losing the plot.
 
 ---
 
@@ -160,6 +161,19 @@ It is designed as **non-spaghetti** architecture suitable for reuse, extension, 
 
 ---
 
+## WASM → WebGL Star Pipeline
+
+The fast-star path now streams descriptors produced in WebAssembly straight into the `star2.frag.glsl` pass. Full details live in [`docs/dataflows/wasm_webgl_shader.md`](./docs/dataflows/wasm_webgl_shader.md); high-level waypoints:
+
+1. **Generation (WASM)** – `src/wasm/star_field.c` emits packed descriptor buffers plus local/spill ID lists and layer metadata inside exported linear memory.
+2. **Binding (JS)** – `src/modules/starFieldWasm.js` instantiates the module, copies typed arrays out of `memory`, and exposes a `generate()` API that mirrors the previous JS stub contract.
+3. **Renderer Upload** – `NebulaRenderer` (in `src/modules/renderer.js`) tiles those 1-D arrays into RGBA32F/R32F/RG32F textures, respecting `gl.MAX_TEXTURE_SIZE`, and binds them to star-fast uniforms/texture units during `render()`.
+4. **Shader Consumption** – `src/shaders/star2.frag.glsl` fetches descriptors + ID tables per cell/layer, shades each star via the glow LUT, and composites the result in the fast-star pass.
+
+If you change the descriptor format or texture layout, update both the README summary and the detailed doc so future contributors can re-thread the pipeline quickly.
+
+---
+
 ## How to Run Locally
 
 From the repository root (where `cosmic-dream/` lives):
@@ -240,3 +254,11 @@ This will:
    - Preserve a legacy single-pass path (nebula-only) that bypasses the composer entirely. It keeps demos lightweight, offers a quick sanity check when debugging, and guarantees graceful degradation on constrained hardware.
 
 This doc is intentionally compact to be friendly to both humans and AI tools when bootstrapping new sessions around `cosmic-dream`.
+
+---
+
+## Problem Snapshot (Nov 23 2025)
+
+- WASM generator ↔ WebGL data uploads are wired and documented.
+- Fast-star shader currently renders **only the first layer** to isolate tile-space issues; higher layers remain disabled until the tile-repetition artifact is resolved.
+- Outstanding debug goal: remove per-cell repetition so halos flow across the grid, then re-enable multi-layer composition.

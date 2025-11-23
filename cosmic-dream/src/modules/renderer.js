@@ -85,13 +85,14 @@ function packIdTextureData(ids, maxWidth) {
   return { width, height: rows, data };
 }
 
-function packIndexTextureData(offsets, counts) {
+function packIndexTextureData(offsets, counts, maxWidth) {
   const length = offsets?.length ?? 0;
-  const width = Math.max(1, length);
-  const height = 1;
-  const data = new Float32Array(width * 2);
+  const { width, height } = computeTiledDimensions(length, 1, maxWidth);
+  const data = new Float32Array(width * height * 2);
   for (let i = 0; i < length; i++) {
-    const base = i * 2;
+    const row = Math.floor(i / width);
+    const column = i - row * width;
+    const base = (row * width + column) * 2;
     data[base] = offsets[i];
     data[base + 1] = counts[i];
   }
@@ -491,7 +492,7 @@ export class NebulaRenderer {
 
   uploadStarFieldIndices(kind, offsets, counts) {
     if (!this.starFieldTextures?.[kind]) return;
-    const payload = packIndexTextureData(offsets, counts);
+    const payload = packIndexTextureData(offsets, counts, this.maxTextureSize);
     this.uploadDataTexture(this.starFieldTextures[kind], payload.width, payload.height, payload.data);
     if (this.starFieldState?.[kind]) {
       this.starFieldState[kind].width = payload.width;
