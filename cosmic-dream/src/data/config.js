@@ -16,6 +16,7 @@ export const PARAMS = [
   // Increased max density for "dusty" look; adjusted max glow for blooms
   { key: 'starDensity', label: 'Density', min: 0.0, max: 200.0, step: 0.1, default: 184.0 },
   { key: 'starTwinkle', label: 'Twinkl',  min: 0.0, max: 1.0, step: 0.01, default: 0.5 },
+  { key: 'starSize',    label: 'Sz',      min: 0.25, max: 2.0, step: 0.01, default: 1.0 },
   
   // Controls the blend between a sharp pinprick and a soft light
   { key: 'starSoft',    label: 'Softnss', min: 0.0, max: 1.0, step: 0.01, default: 0.19 },
@@ -28,6 +29,9 @@ export const PARAMS = [
   
   // Global brightness multiplier
   { key: 'starBright',  label: 'Exposr',  min: 0.0, max: 5.0, step: 0.05, default: 1.0 },
+
+  // Minimal background grid resolution (cells per axis)
+  { key: 'gridCells',   label: 'GridSz',  min: 2,   max: 64,   step: 1,    default: 16 },
 
   // Fast star shader params (decoupled so tweaking slow stars preserves look)
   { key: 'starFastDensity', label: 'FastDen',   min: 0.0, max: 200.0, step: 0.1,  default: 140.0 },
@@ -50,10 +54,9 @@ export const PARAMS = [
 ];
 
 export const PASS_FLAGS = {
-  nebulaEnabled: true,
   starEnabled: true,
-  starFastMode: false,
-  membraneEnabled: true,
+  gridEnabled: true,
+  gridBordersEnabled: true,
 };
 
 export const PASS_FLAG_KEYS = Object.keys(PASS_FLAGS);

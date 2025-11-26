@@ -1,9 +1,6 @@
 const SHADER_URLS = {
   vertex: new URL('../shaders/fullscreen.vert.glsl', import.meta.url),
-  nebula: new URL('../shaders/nebula.frag.glsl', import.meta.url),
-  star: new URL('../shaders/star.frag.glsl', import.meta.url),
-  star2: new URL('../shaders/star2.frag.glsl', import.meta.url),
-  membrane: new URL('../shaders/membrane.frag.glsl', import.meta.url),
+  star: new URL('../shaders/stars.frag.glsl', import.meta.url),
   composite: new URL('../shaders/composite.frag.glsl', import.meta.url),
 };
 
@@ -29,14 +26,11 @@ function fetchShader(url) {
 }
 
 export async function loadShaderSources() {
-  const [vertex, nebula, star, star2, membrane, composite] = await Promise.all([
+  const [vertex, star, composite] = await Promise.all([
     fetchShader(SHADER_URLS.vertex),
-    fetchShader(SHADER_URLS.nebula),
     fetchShader(SHADER_URLS.star),
-    fetchShader(SHADER_URLS.star2),
-    fetchShader(SHADER_URLS.membrane),
     fetchShader(SHADER_URLS.composite),
   ]);
 
-  return { vertex, nebula, star, star2, membrane, composite };
+  return { vertex, star, composite };
 }

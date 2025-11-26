@@ -8,31 +8,14 @@ const MIN_DOCK_HEIGHT = 240;
 
 const GROUPS = [
   {
-    title: 'Nebula',
-    description: 'Background volumetric layers',
-    flagKey: 'nebulaEnabled',
-    keys: ['layers','hueBase','hueSpeed','rotFlow','flow','zoom','nebulaScale','detailScale','brightness','contrast','voidCut','colorSpread','layerDecay']
-  },
-  {
     title: 'Stars',
     description: 'Starfield intensity and bloom',
     flagKey: 'starEnabled',
-    keys: ['starDensity','starTwinkle','starSoft','starGlow','starGlowRad','starBright','starBlend']
-  },
-  {
-    title: 'Stars Fast',
-    description: 'Performance star shader (star2)',
-    flagKey: null,
-    keys: ['starFastDensity','starFastTwinkle','starFastSoft','starFastGlow','starFastGlowRad','starFastBright'],
+    keys: ['gridCells','starDensity','starTwinkle','starSize','starSoft','starGlow','starGlowRad','starBright','starBlend'],
     extraToggles: [
-      { key: 'starFastMode', label: 'Stars Fast' }
+      { key: 'gridEnabled', label: 'Grid' },
+      { key: 'gridBordersEnabled', label: 'Borders' },
     ]
-  },
-  {
-    title: 'Membrane',
-    description: 'Chromatic Distance pass controls',
-    flagKey: 'membraneEnabled',
-    keys: ['membraneStrength','membraneFlow','membraneFringe','momentumPersistence','permissionBloom','permissionGate']
   }
 ];
 
