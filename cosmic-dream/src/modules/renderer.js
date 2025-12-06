@@ -9,7 +9,7 @@ const FULLSCREEN_TRIANGLES = new Float32Array([
    1,  1,
 ]);
 
-const STAR_UNIFORMS = ['zoom','starDensity','starTwinkle','starSize','starSoft','starGlow','starGlowRad','starBright','gridCells'];
+const STAR_UNIFORMS = ['zoom','starDensity','starTwinkle','starZoom'];
 
 class FullscreenGeometry {
   constructor(gl) {
@@ -199,12 +199,8 @@ export class NebulaRenderer {
     const vertSrc = sources.vertex;
 
     this.starPass = new ShaderPass(this.gl, this.geometry, vertSrc, sources.star, STAR_UNIFORMS);
-    this.starPass.setDynamicUniform('gridEnabled', (ctx, loc) => {
-      const enabled = this.store?.data?.gridEnabled !== false;
-      ctx.uniform1f(loc, enabled ? 1.0 : 0.0);
-    });
-    this.starPass.setDynamicUniform('gridBordersEnabled', (ctx, loc) => {
-      const enabled = this.store?.data?.gridBordersEnabled !== false;
+    this.starPass.setDynamicUniform('seamDebugEnabled', (ctx, loc) => {
+      const enabled = this.store?.data?.seamDebugEnabled === true;
       ctx.uniform1f(loc, enabled ? 1.0 : 0.0);
     });
 

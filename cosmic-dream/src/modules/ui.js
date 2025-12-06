@@ -11,10 +11,9 @@ const GROUPS = [
     title: 'Stars',
     description: 'Starfield intensity and bloom',
     flagKey: 'starEnabled',
-    keys: ['gridCells','starDensity','starTwinkle','starSize','starSoft','starGlow','starGlowRad','starBright','starBlend'],
+    keys: ['starZoom','starDensity','starTwinkle','starBlend'],
     extraToggles: [
-      { key: 'gridEnabled', label: 'Grid' },
-      { key: 'gridBordersEnabled', label: 'Borders' },
+      { key: 'seamDebugEnabled', label: 'SeamDbg' },
     ]
   }
 ];

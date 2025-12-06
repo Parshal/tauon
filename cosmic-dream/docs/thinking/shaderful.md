@@ -1,19 +1,31 @@
-# Shaderful Thinking Notes
+# Shader Debug Survival Guide
 
-## Anchoring the Investigation
-1. **Instrument before guessing.** We started by forcing the renderer to log the default debug cell (and later any clicked cell) so every iteration began with a known tile. Seeing local/spill IDs plus descriptors in the console kept the conversation grounded in real data instead of vibes.
-2. **Make the halo math observable end-to-end.** Once logs existed in JS, we mirrored them inside the WASM generator, exposing drop counters and eventually rebuilding the module via a scripted `build_wasm.sh`. Ensuring the same spill radius formula lived in the C and JS generators prevented “almost the same” math from generating divergent buffers.
+## Establish Ground Truth
+1. (we don't have production so skip this) Mirror production GL state (precision, extensions, defines) locally before touching code.
+2. Capture failing frame: GPU markers + renderdoc/webgpu capture + uniform dumps + seed.
+3. Freeze inputs (textures, SSBOs, uniforms) and version them so repro tokens survive reloads.
 
-## Aligning Data With Rendering
-3. **Debug visuals beat raw numbers.** Brightening the purple debug cell, forcing a default selection, and wiring canvas clicks straight to the renderer made the seam obvious and repeatable.
-4. **Split concerns to find root causes.** We separated local vs spill ID buffers, tracked drop counts, and later fixed per-cell spill packing so offsets/counts matched how the shader consumes textures. Each simplification made it easier to see the next actual bug.
-5. **Match coordinate spaces exactly.** The toroidal wrap only worked once both generator and shader used the same world-to-cell scale (size * halo * cells / scale) and the shader wrapped both the tile lookup and the star-to-fragment delta. Any mismatch showed up immediately as grid artifacts.
+## Make Data Observable
+4. Log pipeline edges (CPU generator → upload → shader uniforms) with shared struct schemas.
+5. Encode sanity overlays in-shader: color by branch, animate UV bounds, visualize NaNs.
+6. Add toggles for key uniforms (time, zoom, LOD) and record deltas per toggle in console.
 
-## Tooling for Confidence
-6. **Automate the boring loops.** The `build_wasm.sh` helper (with emcc/clang fallbacks) kept rebuilds honest, so we never questioned whether the browser was serving stale binaries.
-7. **Telemetry should explain outliers.** The per-star spill target logging told us whether a seam tile was missing data or just mis-rendering, which led straight to raising the shader’s `MAX_CELL_STAR_LOOP` cap and wrapping the distance vector.
-8. **Iterate visibly.** Info-level console logs, hue-shifted debug cells, and screenshot callouts meant we could keep the UX responsive while still doing shader surgery.
+## Isolate Compute Paths
+7. Bisect stages: reroute VS → flat color, FS → constant, or bypass composite to find source.
+8. Replace suspect resources with procedural patterns (grid, gradient, ramp) to expose swaps.
+9. Render each buffer to screen-sized debug targets; avoid interpreting packed textures mentally.
 
----
+## Validate Math
+10. Compare CPU + GPU math on same inputs; assert relative error < ε per component.
+11. Print intermediate floats via RGBA packing; sample with PIX/RenderDoc to inspect.
+12. Clamp + normalize aggressively while debugging; remove guards only after fix confirmed.
 
-Freeform note: This session underscored how rendering bugs rarely live in a single file—most of the heavy lifting was stitching shared assumptions together. When the pipeline is transparent (logs, colors, scripts), intuition compounds: the shader fix felt obvious only after the data path was proven solid. Keep that momentum; future shaderful mysteries will fall faster.
+## Timing + Precision Checks
+13. Track derivative use (fwidth, dFdx) vs dynamic branches; ensure gradients legal.
+14. Profile with EXT_disjoint_timer_query; correlate spikes to uniforms or screen-space areas.
+15. Test with lowered precision (mediump) and forced NaN propagation to catch UB early.
+
+## Workflow Hygiene
+16. Script hot-reload pipeline (shader watcher + cache-bust) to avoid stale binaries.
+17. Store playbooks: repro seed, captured buffers, fix summary → tokens stay cheap for AI.
+18. When bug fixed, remove debug hooks except one toggleable path for future reuse.

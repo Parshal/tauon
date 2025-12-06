@@ -71,6 +71,26 @@ Tauon does exactly that.
 
 ---
 
+## 📓 Log / Stats Markdown Enhancements
+
+Tauon ships with a small client-side enhancement pass (see `static/js/layout.js`) that
+makes journaling-friendly cards directly from plain Markdown:
+
+* `### [log] ...` &rarr; wraps each tagged H3 and its following siblings into a `.log-entry`
+  card, strips the `[log]` tag from the visible heading, and keeps pulling content until the
+  next non-`[stats]` heading. In other viewers it remains normal Markdown.
+* `#### [stats] ...` inside a log card becomes a right-aligned `log-stats` band. Consecutive
+  stats lines blend together, while the last one anchors to the card bottom for that "data
+  panel" vibe. Outside Tauon, it renders as a standard H4.
+* Visual styling lives in `static/css/layout.css` (`.log-entry`, `.log-stats`,
+  `.log-stats-last`) so you can tweak the softcard, hover, or footer-panel look without touching
+  the Markdown.
+
+Usage pattern: log entries become timestamp cards, optional stats blocks act as compact
+summary bands inside the same entry, and the raw Markdown stays portable everywhere else.
+
+---
+
 ## 🪶 License
 
 MIT — absolutely free to use, modify, or embed into your workflow.

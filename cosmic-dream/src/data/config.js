@@ -17,22 +17,7 @@ export const PARAMS = [
   { key: 'starDensity', label: 'Density', min: 0.0, max: 200.0, step: 0.1, default: 184.0 },
   { key: 'starTwinkle', label: 'Twinkl',  min: 0.0, max: 1.0, step: 0.01, default: 0.5 },
   { key: 'starSize',    label: 'Sz',      min: 0.25, max: 2.0, step: 0.01, default: 1.0 },
-  
-  // Controls the blend between a sharp pinprick and a soft light
-  { key: 'starSoft',    label: 'Softnss', min: 0.0, max: 1.0, step: 0.01, default: 0.19 },
-  
-  // Controls the intensity of the outer halo
-  { key: 'starGlow',    label: 'Glow',    min: 0.0, max: 2.0, step: 0.01, default: 0.15 },
-  
-  // Controls the physical radius of the light falloff
-  { key: 'starGlowRad', label: 'Radius',  min: 0.0, max: 1.2, step: 0.001, default: 1.2 },
-  
-  // Global brightness multiplier
-  { key: 'starBright',  label: 'Exposr',  min: 0.0, max: 5.0, step: 0.05, default: 1.0 },
-
-  // Minimal background grid resolution (cells per axis)
-  { key: 'gridCells',   label: 'GridSz',  min: 2,   max: 64,   step: 1,    default: 16 },
-
+  { key: 'starZoom',    label: 'St Zoom', min: 0.25, max: 4.0, step: 0.01, default: 1.0 },
   // Fast star shader params (decoupled so tweaking slow stars preserves look)
   { key: 'starFastDensity', label: 'FastDen',   min: 0.0, max: 200.0, step: 0.1,  default: 140.0 },
   { key: 'starFastTwinkle', label: 'FastTwn',   min: 0.0, max: 1.0,   step: 0.01, default: 0.45 },
@@ -55,8 +40,7 @@ export const PARAMS = [
 
 export const PASS_FLAGS = {
   starEnabled: true,
-  gridEnabled: true,
-  gridBordersEnabled: true,
+  seamDebugEnabled: false,
 };
 
 export const PASS_FLAG_KEYS = Object.keys(PASS_FLAGS);
