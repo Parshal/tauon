@@ -23,7 +23,7 @@ canvas.cd-bgCanvas {
 }
 
 /* --- Nodes (DOM Animation) --- */
-.cd-node-inner {
+[data-styler] {
   /* Base styles for the floating cards */
   position: relative;
   padding: 18px 22px;
@@ -36,13 +36,13 @@ canvas.cd-bgCanvas {
   animation: cd-floatNode 10s ease-in-out infinite;
 }
 
-.cd-node-inner:hover {
+[data-styler]:hover {
   transform: translateY(-2px);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12), 0 8px 30px rgba(0,0,0,0.48);
 }
 
 /* Gradient Border Logic */
-.cd-node-inner::before {
+[data-styler]::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -59,13 +59,20 @@ canvas.cd-bgCanvas {
 }
 
 /* Inner Glow */
-.cd-node-inner::after {
+[data-styler]::after {
   content: '';
   position: absolute;
   inset: 0;
   background: linear-gradient(110deg, rgba(255,255,255,0) 0%, hsla(var(--hue-fill), 80%, 60%, 0.14) 50%, rgba(255,255,255,0) 100%);
   z-index: 1;
   pointer-events: none;
+}
+
+[data-styler="stats"] {
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: rgba(5, 12, 18, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(145, 255, 216, 0.15), 0 8px 30px rgba(0,0,0,0.45);
 }
 
 @keyframes cd-floatNode { 0%,100%{transform:translateY(0px);} 50%{transform:translateY(-4px);} }

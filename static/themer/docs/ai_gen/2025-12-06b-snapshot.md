@@ -2,16 +2,16 @@
 
 ## Topology
 - Entry point `src/index.js` instantiates a global `CosmicEngine`, waits for DOM readiness, and immediately boots the renderer/UI stack. @cosmic-dream/src/index.js#1-13
-- `CosmicEngine` wires together `NebulaRenderer`, `HueAnimator`, and the HUD `ControlPanel`, installs resize + visibility observers, and manages the RAF loop/fps averaging lifecycle. @cosmic-dream/src/core/engine.js#1-75
+- `CosmicEngine` wires together `NebulaRenderer`, `Styler`, and the HUD `ControlPanel`, installs resize + visibility observers, and manages the RAF loop/fps averaging lifecycle. @cosmic-dream/src/core/engine.js#1-75
 - Configuration is centralized in `PARAMS` + `PASS_FLAGS`, with `getDefaults()` seeding the shared `store` (`State` publishes updates to every subscriber). @cosmic-dream/src/data/config.js#1-55 @cosmic-dream/src/core/state.js#1-34
 - The HUD `ControlPanel` renders the "Stars" group, binds sliders/toggles to `store.set`, tracks dirty hashes, and persists configs/dock height in `localStorage`. @cosmic-dream/src/modules/ui.js#1-444
 - `NebulaRenderer` owns the fullscreen canvas, compiles the star and composite shader passes, injects dynamic uniforms (e.g., `seamDebugEnabled`), and composites to screen with a dummy fallback texture. @cosmic-dream/src/modules/renderer.js#1-252
-- `HueAnimator` continuously drifts CSS custom properties for `.cd-node-inner` elements to keep the HUD chrome moving. @cosmic-dream/src/modules/animator.js#1-23
+- `Styler` walks the DOM, tags elements with `[data-styler]`, and continuously drifts CSS custom properties to keep the HUD chrome moving. @cosmic-dream/src/modules/styler.js#1-105
 
 ## Runtime Flow
 1. Module load builds `store` from defaults so renderer, UI, and animators share one reactive state object. @cosmic-dream/src/data/config.js#1-55 @cosmic-dream/src/core/state.js#1-34
 2. `engine.init()` creates renderer/UI/animator instances, registers window resize + canvas `IntersectionObserver`, and calls `start()` once the canvas exists. @cosmic-dream/src/core/engine.js#19-43
-3. Each RAF iteration samples FPS, updates the HUD, renders the star/composite passes, and ticks the hue animator before scheduling the next frame. @cosmic-dream/src/core/engine.js#55-74
+3. Each RAF iteration samples FPS, updates the HUD, renders the star/composite passes, and ticks the Styler before scheduling the next frame. @cosmic-dream/src/core/engine.js#55-74
 4. `NebulaRenderer.render()` skips the star pass when `starEnabled === false`, otherwise renders to an offscreen FBO, then composites that texture (or the dummy) with the configured contrast exponent. @cosmic-dream/src/modules/renderer.js#176-252
 
 ## Shader & Rendering Notes

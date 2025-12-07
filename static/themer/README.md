@@ -3,7 +3,7 @@
 Drop-in WebGL2 backdrop + HUD dock + DOM hue animator. Load one module, inherit the whole vibe.
 
 ## TL;DR
-- Full-screen nebula + starfield renderer with hue-animated `.cd-node-inner` cards.
+- Full-screen nebula + starfield renderer with auto-skinned `[data-styler]` cards.
 - Tiny reactive store keeps config, renderer, animator, and HUD in sync.
 - Zero build tooling: native ES modules, static assets, and one demo page.
 
@@ -25,10 +25,10 @@ For a one-paragraph primer, see `docs/intro.md`. For fresh AI-ready context dump
 | --- | --- | --- |
 | Config + defaults | Define sliders, toggles, presets | `src/data/config.js`
 | Reactive store | Plain-object state + listeners (`get`, `set`, `setAll`) | `src/core/state.js`
-| Engine | Orchestrates renderer, HUD, animator, resize, and visibility | `src/core/engine.js`
+| Engine | Orchestrates renderer, HUD, styler, resize, and visibility | `src/core/engine.js`
 | Renderer | Builds `<canvas class="cd-bgCanvas">`, compiles shaders, caches uniforms, renders passes | `src/modules/renderer.js`, `src/shaders/*.glsl`
 | Control Panel | Single `.cd-hud-dock` with slider groups, toggles, copy/save, height persistence | `src/modules/ui.js`, `css/themer.css`
-| Hue Animator | Scans `.cd-node-inner`, increments CSS custom props for border glow | `src/modules/animator.js`
+| Styler | Walks host DOM, tags candidates with `[data-styler]`, animates hue vars | `src/modules/styler.js`
 | Demo shell | Minimal host for quick visual QA | `demo.html`
 
 ---
@@ -37,7 +37,7 @@ For a one-paragraph primer, see `docs/intro.md`. For fresh AI-ready context dump
 1. **Boot.** `src/index.js` instantiates `ThemerEngine`, waits for DOM readiness, and exposes `window.Themer` for poke-testing.
 2. **State seed.** `getDefaults()` builds the initial store object (slider params + `PASS_FLAGS` such as `nebulaEnabled`).
 3. **HUD render.** `ControlPanel` reads the store to lay out slider groups, ON/OFF pills, and telemetry (FPS + blend mode). Height + config state persist via `localStorage` keys `themerDockHeight` / `themerConfig`.
-4. **Loop.** `engine.loop()` computes `t`, renders enabled passes, composites, and advances the `HueAnimator`. FPS sampling updates the HUD meta row.
+4. **Loop.** `engine.loop()` computes `t`, renders enabled passes, composites, and ticks the `Styler`. FPS sampling updates the HUD meta row.
 5. **Reactivity.** Slider/number/pill events call `store.set*`, fan out to renderer uniforms, and keep the HUD + DOM glow consistent. Copy/save buttons serialize the store for AI/human hand-off.
 6. **Visibility + resize.** IntersectionObserver pauses RAF/FPS when the canvas is off-screen. `resize` events rebuild framebuffers and canvas viewport.
 
@@ -47,7 +47,7 @@ For a one-paragraph primer, see `docs/intro.md`. For fresh AI-ready context dump
 - Dock hugs the bottom ~95 vw by default and includes a grab handle; height (≥240 px) persists per browser.
 - Top bar: FPS, config dirty badge, Save / Copy JSON / Minimize controls.
 - Slider groups (Nebula, Experiments…) render independently so widths stay compact; each stack owns its pass toggle pill.
-- `.cd-node-inner` cards inherit animated gradient borders driven by `--hue-border`, which the HueAnimator updates per frame.
+- Any element the Styler tags with `[data-styler]` inherits gradient borders/glow via CSS custom properties that animate every frame.
 
 ---
 
@@ -56,7 +56,7 @@ For a one-paragraph primer, see `docs/intro.md`. For fresh AI-ready context dump
    ```html
    <link rel="stylesheet" href="/themer/css/themer.css">
    ```
-2. **Render cards** – add `.cd-node-inner` to elements you want hue-animated (or reuse the class on existing DOM nodes).
+2. **Render cards** – drop your normal Markdown/DOM; Styler auto-tags eligible blocks with `[data-styler]`, so no special class is required.
 3. **Load the module**
    ```html
    <script type="module" src="/themer/src/index.js"></script>

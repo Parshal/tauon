@@ -1,12 +1,12 @@
 import { store } from './state.js';
 import { BackgroundRenderer } from '../modules/renderer.js';
-import { HueAnimator } from '../modules/animator.js';
+import { Styler } from '../modules/styler.js';
 import { ControlPanel } from '../modules/ui.js';
 
 export class ThemerEngine {
   constructor() {
     this.renderer = null;
-    this.animator = null;
+    this.styler = null;
     this.ui = null;
     
     this.startTime = performance.now();
@@ -20,7 +20,7 @@ export class ThemerEngine {
     if (this.renderer) return; // prevent double init
 
     this.renderer = new BackgroundRenderer(store);
-    this.animator = new HueAnimator();
+    this.styler = new Styler();
     this.ui = new ControlPanel(store);
 
     // Window Events
@@ -69,7 +69,7 @@ export class ThemerEngine {
     }
     
     this.renderer.render(t);
-    this.animator.update();
+    if (this.styler) this.styler.tick(delta);
 
     this.rafId = requestAnimationFrame(() => this.loop());
   }
