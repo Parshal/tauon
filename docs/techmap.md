@@ -15,7 +15,7 @@
 
 4. **Template skeleton (`templates/layout.html`)**
    - Split layout: sticky sidebar (tree + toggle), draggable divider, main panel with file path form + preview slot (`{{ main|safe }}`).
-   - Loads `static/css/layout.css` plus the modular JS bundle (`zoom.js`, `sidebar-toggle.js`, `sidebar-resize.js`, `log-cards.js`, `layout.js`).
+   - Loads `static/css/layout.css`, the modular JS bundle (`zoom.js`, `sidebar-toggle.js`, `sidebar-resize.js`, `log-cards.js`, `layout.js`), and mounts the Themer plugin (canvas + HUD) via `/static/themer/src/index.js` when the theme is enabled.
 
 5. **Client behavior (modular JS)**
    - `static/js/zoom.js`: LocalStorage-based zoom, intercepts Ctrl/⌘ ±/wheel to keep layout stable.
@@ -26,5 +26,10 @@
 
 6. **Styling (`static/css/layout.css`)**
    - Sets neon-dark theme, layout grid, sidebar/main chrome, button styles, markdown typography, `.log-entry` / `.log-stats` visuals.
+   - Coordinates with `.cd-*` classes emitted by Themer so Tauon pages and the plugin share consistent spacing + z-index rules without restyling the WebGL surface.
+
+7. **Themer plugin (static/themer)**
+   - Lives under `static/themer/` and ships as a drop-in WebGL2 backdrop + HUD dock hooked into Tauon's layout via standard `<link>` / `<script type="module">` tags.
+   - Treat its README + docs (`static/themer/README.md`, `static/themer/docs/*.md`) as the source of truth for shaders, HUD controls, and AI workflows—Tauon docs only note the integration point so they stay lightweight.
 
 That’s the full flow: shell launcher → Flask route → markdown conversion → Jinja layout → JS/CSS enhancements. No Themer coupling.

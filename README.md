@@ -64,6 +64,7 @@ Then open:
 * Serves Markdown files from *exactly where you run it*
 * Renders them cleanly in your browser
 * Uses only Flask + Markdown — nothing more
+* Hosts the optional **Themer** plugin (WebGL backdrop + HUD) directly inside `templates/layout.html`; if you enable it, Tauon simply loads `/static/themer/src/index.js` and its CSS without changing the Markdown flow. See `static/themer/README.md` for the full shader/UI docs so this README stays lean.
 
 If you want a tiny, predictable, dependency-light Markdown viewer
 that never touches your system outside `/usr/local/bin/tauon`,
