@@ -5,6 +5,7 @@
   <title>{{title}}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='themer/css/themer.css') }}">
 </head>
 <body class="{{body_class}}">
   <div class="layout">
@@ -67,5 +68,6 @@
   <script src="{{ url_for('static', filename='js/sidebar-resize.js') }}"></script>
   <script src="{{ url_for('static', filename='js/log-cards.js') }}"></script>
   <script src="{{ url_for('static', filename='js/layout.js') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='themer/src/index.js') }}"></script>
 </body>
 </html>
