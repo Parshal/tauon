@@ -69,7 +69,10 @@ export class ThemerEngine {
     }
     
     this.renderer.render(t);
-    if (this.styler) this.styler.tick(delta);
+    if (this.styler) {
+      this.styler.tick(delta);
+      this.styler.rescan(delta);
+    }
 
     this.rafId = requestAnimationFrame(() => this.loop());
   }

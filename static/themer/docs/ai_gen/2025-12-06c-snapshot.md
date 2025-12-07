@@ -8,7 +8,7 @@
 - **UI Control Panel.** The HUD builds draggable/minimizable groups from `PARAMS`, syncs sliders + numeric min/max boxes, persists config (`themerConfig`) + dock height (`themerDockHeight`) in `localStorage`, and reports blend mode/FPS/state to the user. @themer/src/modules/ui.js#1-444
 - **Styler.** Walks the host DOM, tags eligible elements with `[data-styler]`, and continuously rewrites CSS custom properties so DOM chrome drifts in sync with the HUD aesthetic. @themer/src/modules/styler.js#1-105
 - **Theme surfaces.** `css/themer.css` skins the WebGL canvas, HUD dock, sliders, and any `[data-styler]` markers so Themer can drop into arbitrary layouts without conflicting styles. @themer/css/themer.css#1-279
-- **Host/demo glue.** `demo.html` consumes `css/themer.css` + `src/index.js` for a stock showcase, while `themer.html` ships a self-contained v2.1 plugin (legacy drop-in script + HUD builder) that exposes `window.ThemerLegacy` for older sites. @themer/demo.html#1-63 @themer.html#1-717
+- **Host glue.** `themer.html` ships a self-contained v2.1 plugin (legacy drop-in script + HUD builder) that exposes `window.ThemerLegacy` for older sites. @themer.html#1-717
 
 ## Runtime Flow
 1. Module load builds the reactive `store` from defaults so all subsystems share the same parameter object. @themer/src/data/config.js#1-55 @themer/src/core/state.js#1-34
@@ -28,7 +28,6 @@
 
 ## Theme Surfaces & Integration Glue
 - **CSS HUD + cards.** `.cd-hud-dock`, `.cd-control`, `.cd-node-inner`, and gradient border animations are defined in `css/themer.css`, including pointer-resize handle + mix-blend canvas layering so the backdrop and DOM cards coexist. @themer/css/themer.css#14-279
-- **Drop-in demo shell.** `demo.html` loads the modular engine via `<script type="module" src="./src/index.js"></script>` and supplies a minimal card tree to showcase hue animations. @themer/demo.html#8-63
 - **Self-contained legacy build.** `themer.html` (v2.1) embeds the CSS + HUD + shader logic inline for environments that cannot import the ES-module engine; it exposes `global.ThemerLegacy` and mirrors the IntersectionObserver pause logic. @themer.html#24-715
 - **Tauon site wiring.** `templates/layout.html` plus `static/js/log-cards.js` and `static/css/layout.css` provide the Markdown viewer/log styling Themer expects when mounted as a theme across the wider site. @templates/layout.html#1-69 @static/js/log-cards.js#1-88 @static/css/layout.css#548-662
 

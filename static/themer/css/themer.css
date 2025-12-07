@@ -3,14 +3,7 @@
   --cd-bg-void: #020204;
 }
 
-/* --- Base & Canvas --- */
-body {
-  margin: 0;
-  background: var(--cd-bg-void);
-  font-family: var(--cd-font);
-  color: white;
-}
-
+/* --- Canvas surface --- */
 canvas.cd-bgCanvas {
   position: fixed;
   inset: 0;
@@ -22,7 +15,7 @@ canvas.cd-bgCanvas {
   background: var(--cd-bg-void);
 }
 
-/* --- Nodes (DOM Animation) --- */
+/* --- Drop-in DOM nodes (tagged via Styler) --- */
 [data-styler] {
   /* Base styles for the floating cards */
   position: relative;
@@ -95,6 +88,8 @@ canvas.cd-bgCanvas {
   padding: 4px 20px 16px;
   transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
   transform: translateX(-50%);
+  font-family: var(--cd-font);
+  color: white;
 }
 
 .cd-hud-dock.minimized { transform: translate(-50%, calc(100% - 44px)); }

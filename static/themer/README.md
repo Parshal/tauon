@@ -5,7 +5,7 @@ Drop-in WebGL2 backdrop + HUD dock + DOM hue animator. Load one module, inherit 
 ## TL;DR
 - Full-screen nebula + starfield renderer with auto-skinned `[data-styler]` cards.
 - Tiny reactive store keeps config, renderer, animator, and HUD in sync.
-- Zero build tooling: native ES modules, static assets, and one demo page.
+- Zero build tooling: native ES modules and static assets.
 
 For a one-paragraph primer, see `docs/intro.md`. For fresh AI-ready context dumps, tap `docs/ai_gen/start_prompt.md`.
 
@@ -29,7 +29,6 @@ For a one-paragraph primer, see `docs/intro.md`. For fresh AI-ready context dump
 | Renderer | Builds `<canvas class="cd-bgCanvas">`, compiles shaders, caches uniforms, renders passes | `src/modules/renderer.js`, `src/shaders/*.glsl`
 | Control Panel | Single `.cd-hud-dock` with slider groups, toggles, copy/save, height persistence | `src/modules/ui.js`, `css/themer.css`
 | Styler | Walks host DOM, tags candidates with `[data-styler]`, animates hue vars | `src/modules/styler.js`
-| Demo shell | Minimal host for quick visual QA | `demo.html`
 
 ---
 
@@ -63,17 +62,6 @@ For a one-paragraph primer, see `docs/intro.md`. For fresh AI-ready context dump
    ```
 
 Themer prepends the canvas, mounts the HUD, and begins animating cards automatically.
-
-Legacy drop-in browsers can still use `themer.html` (self-contained v2.1 build exposing `window.ThemerLegacy`).
-
----
-
-## Run Locally
-```bash
-python -m http.server 8000
-```
-
-Visit `http://localhost:8000/static/themer/demo.html` (or `/themer/demo.html` from repo root) so ES module imports resolve via HTTP.
 
 ---
 

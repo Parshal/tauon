@@ -11,7 +11,7 @@ Capture a **token-efficient, high-signal snapshot** of Themer—the drop-in them
 - Path: `tauon/static/themer`
 - Surfaces to cover every run:
   1. **Runtime stack** – `src/index.js`, `core`, `modules`, `data`, `shaders`.
-  2. **Theme surfaces** – `css/themer.css`, `demo.html`, `themer.html`, `templates/`, `static/` assets that host the theme.
+  2. **Theme surfaces** – `css/themer.css`, `themer.html`, `templates/`, `static/` assets that host the theme.
   3. **Docs + logs** – `docs/intro.md`, `docs/dora/*`, `docs/ai_gen/*`, and any other narrative/state trackers.
   4. **Integration glue** – anything that makes Themer a drop-in plugin (store wiring, exports, `window.Themer` + `window.ThemerLegacy`, installation scripts).
 - Out of scope: unrelated Tauon repo roots outside `themer/` or deleted passes unless reintroduced.
