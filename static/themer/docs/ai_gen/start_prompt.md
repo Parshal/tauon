@@ -14,7 +14,7 @@ Capture a **token-efficient, high-signal snapshot** of Themer—the drop-in them
   2. **Theme surfaces** – `css/themer.css`, `demo.html`, `themer.html`, `templates/`, `static/` assets that host the theme.
   3. **Docs + logs** – `docs/intro.md`, `docs/dora/*`, `docs/ai_gen/*`, and any other narrative/state trackers.
   4. **Integration glue** – anything that makes Themer a drop-in plugin (store wiring, exports, `window.Themer` + `window.ThemerLegacy`, installation scripts).
-- Out of scope: unrelated Tauon repo roots outside `themer/`, legacy WASM experiments, or deleted passes unless reintroduced.
+- Out of scope: unrelated Tauon repo roots outside `themer/` or deleted passes unless reintroduced.
 - Docs live under `docs/ai_gen/` – each run appends/updates files there only. Use `whats_changed.md` for rolling deltas between full snapshots.
 
 ## Rules of Engagement
