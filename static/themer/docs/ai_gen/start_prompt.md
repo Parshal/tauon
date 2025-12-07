@@ -8,7 +8,7 @@ Use this prompt verbatim (or adapt minimally) whenever an AI session needs to re
 Capture a **token-efficient, high-signal snapshot** of Themer—the drop-in theme module pairing WebGL2 backdrop, HUD dock, and hue-animated DOM chrome—so future AI can reason about renderer, UI, CSS, host integration, and docs without rereading the whole repo. Treat the output as persistent memory that must stay aligned with the codebase.
 
 ## Scope
-- Repository: `/home/void/repo/tauon/themer`
+- Path: `tauon/static/themer`
 - Surfaces to cover every run:
   1. **Runtime stack** – `src/index.js`, `core`, `modules`, `data`, `shaders`.
   2. **Theme surfaces** – `css/themer.css`, `demo.html`, `themer.html`, `templates/`, `static/` assets that host the theme.
