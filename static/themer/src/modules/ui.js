@@ -2,16 +2,15 @@ import { PARAMS, PASS_FLAG_KEYS } from '../data/config.js';
 
 const STORAGE_KEY = 'themerConfig';
 const STORAGE_KEY_HEIGHT = 'themerDockHeight';
-const BLEND_LABELS = ['Additive', 'Screen', 'Adaptive', 'Split'];
 const DEFAULT_DOCK_HEIGHT = 400;
 const MIN_DOCK_HEIGHT = 240;
 
 const GROUPS = [
   {
     title: 'Stars',
-    description: 'Starfield intensity and bloom',
+    description: 'Starfield intensity',
     flagKey: 'starEnabled',
-    keys: ['starZoom','starDensity','starTwinkle','starBlend'],
+    keys: ['starZoom','starDensity','starTwinkle'],
     extraToggles: [
       { key: 'seamDebugEnabled', label: 'SeamDbg' },
     ]
@@ -23,7 +22,6 @@ export class ControlPanel {
     this.store = store;
     this.dock = null;
     this.fpsEl = null;
-    this.blendEl = null;
     this.statusEl = null;
     this.savedHash = '';
     this.isDirty = false;
@@ -35,7 +33,6 @@ export class ControlPanel {
     this.savedHash = this.hashState(this.store.data);
     this.bindEvents();
     this.subscribeToStore();
-    this.updateBlendLabel(this.store.get('starBlend'));
     this.setDirtyState(false);
     this.loadSavedConfig();
     this.restoreDockHeight();
@@ -71,10 +68,6 @@ export class ControlPanel {
           <div class="cd-meta-item">
             <span>FPS</span>
             <strong id="cd-fps">--</strong>
-          </div>
-          <div class="cd-meta-item">
-            <span>BLEND</span>
-            <strong id="cd-blend">Additive</strong>
           </div>
           <div class="cd-meta-item cd-status" id="cd-status">CONFIG SAVED</div>
         </div>
@@ -264,7 +257,6 @@ export class ControlPanel {
   onStoreUpdate(data) {
     this.syncControls(data);
     this.syncToggles(data);
-    this.updateBlendLabel(data.starBlend);
     if (!this.skipDirtyCheck) {
       const dirty = this.hashState(data) !== this.savedHash;
       this.setDirtyState(dirty);
@@ -301,7 +293,7 @@ export class ControlPanel {
   }
 
   hashState(data) {
-    const paramHash = PARAMS.map(p => `${p.key}:${data[p.key]}`).join('|');
+    const paramHash = PARAMS.map(p => `${p.key}:${data[p.key] ?? ''}`).join('|');
     const flagHash = PASS_FLAG_KEYS.map(key => `${key}:${data[key] !== false}`).join('|');
     return `${paramHash}|${flagHash}`;
   }
@@ -313,12 +305,6 @@ export class ControlPanel {
     if (!this.statusTempActive) {
       this.statusEl.textContent = isDirty ? 'UNSAVED CONFIG' : 'CONFIG SAVED';
     }
-  }
-
-  updateBlendLabel(modeValue = 0) {
-    if (!this.blendEl) return;
-    const index = Math.max(0, Math.min(BLEND_LABELS.length - 1, Math.round(modeValue)));
-    this.blendEl.textContent = `${BLEND_LABELS[index]} (${index})`;
   }
 
   setFPS(value) {
