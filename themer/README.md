@@ -1,7 +1,7 @@
-# Cosmic Dream – Quick Context
+# Themer – Quick Context
 
 **One-liner (AI + human primer)**  
-Cosmic Dream is a modular WebGL2 nebula background + HUD control panel built around a tiny reactive store: the store holds shader params, the UI edits them, the renderer maps them to uniforms, and the engine drives a render loop and DOM hue animations.
+Themer is a modular WebGL2 nebula background + HUD control panel built around a tiny reactive store: the store holds shader params, the UI edits them, the renderer maps them to uniforms, and the engine drives a render loop and DOM hue animations.
 
 **Implementation sketch**  
 - ES modules only, no build step.
@@ -25,9 +25,9 @@ Careful architect of small surfaces: keeps files sparse on purpose, seeds just e
 
 ---
 
-## What Cosmic Dream Is
+## What Themer Is
 
-Cosmic Dream is a self-contained background "nebula" effect with:
+Themer is a self-contained background "nebula" effect with:
 
 - **WebGL2 nebula shader** as a full-screen canvas backdrop.
 - **HUD control dock** to tweak shader parameters live.
@@ -39,7 +39,7 @@ It is designed as **non-spaghetti** architecture suitable for reuse, extension, 
 
 ## File Map
 
-- **`css/cosmic.css`**
+- **`css/themer.css`**
   - Core visual styling:
     - Full-screen WebGL canvas (`.cd-bgCanvas`).
     - HUD dock layout (`.cd-hud-dock`, controls, buttons).
@@ -64,8 +64,8 @@ It is designed as **non-spaghetti** architecture suitable for reuse, extension, 
     - `notify()` fan-outs current `data` to all subscribers.
 
 - **`src/core/engine.js`**
-  - High-level orchestrator (`CosmicEngine`):
-    - Creates `NebulaRenderer`, `HueAnimator`, `ControlPanel`.
+  - High-level orchestrator (`ThemerEngine`):
+    - Creates `BackgroundRenderer`, `HueAnimator`, `ControlPanel`.
     - Handles window `resize` → `renderer.resize()`.
     - Uses `IntersectionObserver` on the canvas to **start/stop** the loop.
     - Manages RAF loop:
@@ -73,7 +73,7 @@ It is designed as **non-spaghetti** architecture suitable for reuse, extension, 
       - Calls `renderer.render(t)` and `animator.update()`.
 
 - **`src/modules/renderer.js`**
-  - `NebulaRenderer`:
+  - `BackgroundRenderer`:
     - Creates and prepends a `<canvas class="cd-bgCanvas">`.
     - Initializes WebGL2 context and compiles per-pass programs (nebula + star) plus the fullscreen composer.
     - Sets up a fullscreen triangle VBO and `a_position` attribute.
@@ -109,13 +109,13 @@ It is designed as **non-spaghetti** architecture suitable for reuse, extension, 
 
 - **`src/index.js`**
   - Entry point for the module:
-    - Creates a `CosmicEngine` instance.
+    - Creates a `ThemerEngine` instance.
     - On `DOMContentLoaded` (or immediately, if already loaded) calls `engine.init()`.
-    - Exposes `window.CosmicDream = engine` for quick manual debugging.
+    - Exposes `window.Themer = engine` for quick manual debugging.
 
 - **`demo.html`**
   - Standalone demo page:
-    - Includes `css/cosmic.css`.
+    - Includes `css/themer.css`.
     - Renders a small tree of `.cd-node-inner` cards to show hue animation.
     - Loads the engine via:
       ```html
@@ -147,12 +147,12 @@ It is designed as **non-spaghetti** architecture suitable for reuse, extension, 
    - `State` mutates `data`, updates the hash/preset dirty bit, and calls `notify()`.
 
 4. **Store → Renderer**
-   - `NebulaRenderer` subscribes to `store`.
+   - `BackgroundRenderer` subscribes to `store`.
    - On notify, it feeds params into `NebulaPass` / `StarPass` uniforms and uses the toggles to determine whether each pass renders before the composite stage samples their textures.
    - Fast/legacy star selection is documented in codemap `Fast_Star_Shader_Toggle_Coupling_Bug_20251122_202341` for quick reference.
 
 5. **Engine Loop → Renderer / Animator**
-   - `CosmicEngine.loop()` computes `t` and calls:
+   - `ThemerEngine.loop()` computes `t` and calls:
      - `renderer.render(t)` → runs enabled passes, then the composer.
      - `animator.update()` → updates card hue CSS vars.
 
@@ -168,7 +168,7 @@ The fast-star path now streams descriptors produced in WebAssembly straight into
 
 1. **Generation (WASM)** – `src/wasm/star_field.c` emits packed descriptor buffers plus local/spill ID lists and layer metadata inside exported linear memory.
 2. **Binding (JS)** – `src/modules/starFieldWasm.js` instantiates the module, copies typed arrays out of `memory`, and exposes a `generate()` API that mirrors the previous JS stub contract.
-3. **Renderer Upload** – `NebulaRenderer` (in `src/modules/renderer.js`) tiles those 1-D arrays into RGBA32F/R32F/RG32F textures, respecting `gl.MAX_TEXTURE_SIZE`, and binds them to star-fast uniforms/texture units during `render()`.
+3. **Renderer Upload** – `BackgroundRenderer` (in `src/modules/renderer.js`) tiles those 1-D arrays into RGBA32F/R32F/RG32F textures, respecting `gl.MAX_TEXTURE_SIZE`, and binds them to star-fast uniforms/texture units during `render()`.
 4. **Shader Consumption** – `src/shaders/star2.frag.glsl` fetches descriptors + ID tables per cell/layer, shades each star via a glow LUT-driven halo profile, and composites the result in the fast-star pass.
 
 Fast-star sliders are mapped into a more "physical" space before they hit the shader:
@@ -188,7 +188,7 @@ If you change the descriptor format or texture layout, update both the README su
 
 ## How to Run Locally
 
-From the repository root (where `cosmic-dream/` lives):
+From the repository root (where `themer/` lives):
 
 ```bash
 python -m http.server 8000
@@ -196,7 +196,7 @@ python -m http.server 8000
 
 Then open:
 
-- `http://localhost:8000/cosmic-dream/demo.html`
+- `http://localhost:8000/themer/demo.html`
 
 A static server is recommended (ES module imports may fail on `file://`).
 
@@ -209,7 +209,7 @@ Minimal integration steps:
 1. **Include the CSS**
 
 ```html
-<link rel="stylesheet" href="/cosmic-dream/css/cosmic.css">
+<link rel="stylesheet" href="/themer/css/themer.css">
 ```
 
 2. **Add some `.cd-node-inner` cards** (or reuse your own DOM but apply that class).
@@ -217,7 +217,7 @@ Minimal integration steps:
 3. **Load the engine**
 
 ```html
-<script type="module" src="/cosmic-dream/src/index.js"></script>
+<script type="module" src="/themer/src/index.js"></script>
 ```
 
 This will:
@@ -239,11 +239,11 @@ This will:
   - You can define additional presets in `config.js`, e.g.:
     ```js
     export const PRESETS = {
-      cosmicV3: { /* layers, hueBase, ... */ },
+      themerV3: { /* layers, hueBase, ... */ },
       // others...
     };
     ```
-  - Then apply them via `store.setAll(PRESETS.cosmicV3);` in the console or code.
+  - Then apply them via `store.setAll(PRESETS.themerV3);` in the console or code.
 
 - **Alternate UI**
   - Keep `store` and `renderer` as the core and build a different UI module that
@@ -265,4 +265,4 @@ This will:
 4. **Simple-mode fallback**
    - Preserve a legacy single-pass path (nebula-only) that bypasses the composer entirely. It keeps demos lightweight, offers a quick sanity check when debugging, and guarantees graceful degradation on constrained hardware.
 
-This doc is intentionally compact to be friendly to both humans and AI tools when bootstrapping new sessions around `cosmic-dream`. For deeper notes on the recent spill-debug odyssey, see [`docs/thinking/shaderful.md`](./docs/thinking/shaderful.md).
+This doc is intentionally compact to be friendly to both humans and AI tools when bootstrapping new sessions around `themer`. For deeper notes on the recent spill-debug odyssey, see [`docs/thinking/shaderful.md`](./docs/thinking/shaderful.md).

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Cosmic Dream v2.1 (Fixed HUD)</title>
+<title>Themer v2.1 (Fixed HUD)</title>
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <style>
   /* prefixed styles to avoid collisions: cd- */
@@ -260,7 +260,7 @@
 <body>
 
 <div id="demo-root">
-  <h1 style="text-align:center; color:#fff; margin-top:15vh; opacity:0.95">Cosmic Dream</h1>
+  <h1 style="text-align:center; color:#fff; margin-top:15vh; opacity:0.95">Themer</h1>
   <h3 style="text-align:center; color:rgba(255,255,255,0.5); font-weight:400; font-size:14px;">Multi-Layer WebGL System</h3>
 </div>
 
@@ -300,7 +300,7 @@
 </div>
 
 <script>
-  /* Cosmic Dream Drop-in Plugin - v2.1 (Fixed HUD) */
+  /* Themer Drop-in Plugin - v2.1 (Fixed HUD) */
   (function(global){
     const PLUGIN_PREFIX = 'cd';
     const DEFAULTS = {
@@ -682,9 +682,9 @@
     }
 
     function init() {
-      global.CosmicDream = global.CosmicDream || {};
-      if(global.CosmicDream.active) return;
-      global.CosmicDream.active = true;
+      global.ThemerLegacy = global.ThemerLegacy || {};
+      if(global.ThemerLegacy.active) return;
+      global.ThemerLegacy.active = true;
       
       initGL();
       createHUD();

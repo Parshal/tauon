@@ -173,7 +173,7 @@ class CompositePass {
   }
 }
 
-export class NebulaRenderer {
+export class BackgroundRenderer {
   constructor(store) {
     this.store = store;
     this.canvas = null;

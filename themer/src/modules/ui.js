@@ -1,7 +1,7 @@
 import { PARAMS, PASS_FLAG_KEYS } from '../data/config.js';
 
-const STORAGE_KEY = 'cosmicDreamConfig';
-const STORAGE_KEY_HEIGHT = 'cosmicDreamDockHeight';
+const STORAGE_KEY = 'themerConfig';
+const STORAGE_KEY_HEIGHT = 'themerDockHeight';
 const BLEND_LABELS = ['Additive', 'Screen', 'Adaptive', 'Split'];
 const DEFAULT_DOCK_HEIGHT = 400;
 const MIN_DOCK_HEIGHT = 240;

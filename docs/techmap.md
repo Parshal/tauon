@@ -27,4 +27,4 @@
 6. **Styling (`static/css/layout.css`)**
    - Sets neon-dark theme, layout grid, sidebar/main chrome, button styles, markdown typography, `.log-entry` / `.log-stats` visuals.
 
-That’s the full flow: shell launcher → Flask route → markdown conversion → Jinja layout → JS/CSS enhancements. No cosmic-dream coupling.
+That’s the full flow: shell launcher → Flask route → markdown conversion → Jinja layout → JS/CSS enhancements. No Themer coupling.

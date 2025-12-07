@@ -1,9 +1,9 @@
 import { store } from './state.js';
-import { NebulaRenderer } from '../modules/renderer.js';
+import { BackgroundRenderer } from '../modules/renderer.js';
 import { HueAnimator } from '../modules/animator.js';
 import { ControlPanel } from '../modules/ui.js';
 
-export class CosmicEngine {
+export class ThemerEngine {
   constructor() {
     this.renderer = null;
     this.animator = null;
@@ -19,7 +19,7 @@ export class CosmicEngine {
   init() {
     if (this.renderer) return; // prevent double init
 
-    this.renderer = new NebulaRenderer(store);
+    this.renderer = new BackgroundRenderer(store);
     this.animator = new HueAnimator();
     this.ui = new ControlPanel(store);
 

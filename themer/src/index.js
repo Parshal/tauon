@@ -1,6 +1,6 @@
-import { CosmicEngine } from './core/engine.js';
+import { ThemerEngine } from './core/engine.js';
 
-const engine = new CosmicEngine();
+const engine = new ThemerEngine();
 
 // Auto-boot on load
 if (document.readyState === 'loading') {
@@ -10,4 +10,4 @@ if (document.readyState === 'loading') {
 }
 
 // Expose for debugging
-window.CosmicDream = engine;
+window.Themer = engine;
