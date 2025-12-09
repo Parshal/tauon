@@ -13,6 +13,7 @@ export const PASS_FLAGS = {
   stylerGlowEnabled: true,
   stylerRoleJadeEnabled: true,
   hudDebugEnabled: false,
+  timingDebugEnabled: false,
 };
 
 export const PASS_FLAG_KEYS = Object.keys(PASS_FLAGS);

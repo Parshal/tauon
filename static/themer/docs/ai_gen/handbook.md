@@ -118,7 +118,7 @@ _Update this section each run; older snapshots can be archived below if desired.
 | Composite contrast | @static/themer/src/modules/renderer.js#146-175 | `CompositePass` binds the star FBO (or dummy) and applies the contrast exponent before writing to the onscreen canvas. |
 
 ### HUD & Store Wiring
-- **Dock & controls.** HUD renders minimized by default, adds draggable height, copy/save/min buttons, FPS/GPU readouts, and vertical sliders grouped under "Stars" + "CSS Styling" sections. @static/themer/src/modules/ui.js#64-214
+- **Dock & controls.** HUD renders minimized by default, adds draggable height, copy/save/min buttons, FPS/GPU readouts, and vertical sliders grouped under "Stars" (now with seam + timing debug toggles) + "CSS Styling" sections. @static/themer/src/modules/ui.js#64-214
 - **Persistence.** Config snapshots + dock height persist in `localStorage`; `hashState()` tracks dirty status so "CONFIG SAVED" / "UNSAVED" messaging stays accurate. @static/themer/src/modules/ui.js#379-478
 - **Global flags.** `applyGlobalFlags()` toggles body classes (`cd-styler-wobble-off`, `cd-styler-gradient-off`, `cd-styler-glow-off`, `cd-styler-role-jade-off`, `cd-hud-debug`) so CSS can instantly disable animations/gradients/glow or flip the HUD into debug skin. @static/themer/src/modules/ui.js#287-303 @static/themer/css/themer.css#179-236
 - **Telemetry.** `setFPS()` and `setGpuTime()` drive the meta bar; renderer timings feed straight into the HUD each frame. @static/themer/src/core/engine.js#55-78 @static/themer/src/modules/ui.js#349-385

@@ -199,6 +199,42 @@ export class BackgroundRenderer {
     this.lastPerfNowMs = null;
     this.cpuFallbackEnabled = false;
     this.gpuTimerWarningShown = false;
+    this.timingDebugEnabled = typeof window !== 'undefined' && window.__THEMER_TIMING_DEBUG__ === true;
+  }
+
+  setupTimerSupport() {
+    if (!this.gl) return;
+    if (this.timerExtMode && this.timingMode !== 'none') return;
+
+    if (!this.timerExt) {
+      const primary = this.gl.getExtension('EXT_disjoint_timer_query_webgl2');
+      if (primary) {
+        this.timerExt = primary;
+        this.timerExtMode = 'webgl2';
+      } else {
+        const fallbackExt = this.gl.getExtension('EXT_disjoint_timer_query');
+        if (fallbackExt) {
+          this.timerExt = fallbackExt;
+          this.timerExtMode = 'webgl1';
+        }
+      }
+    }
+
+    if (this.timerExt) {
+      this.timingMode = 'gpu-ext';
+      this.cpuFallbackEnabled = false;
+      this.debugTiming('GPU timer extension ready', this.timerExtMode);
+    } else {
+      this.timingMode = 'cpu-fallback';
+      this.cpuFallbackEnabled = true;
+      this.debugTiming('GPU timer extension missing, using CPU fallback');
+    }
+  }
+
+  debugTiming(...args) {
+    if (this.timingDebugEnabled) {
+      console.log('[Themer][Timing]', ...args);
+    }
   }
 
   async init() {
@@ -209,22 +245,7 @@ export class BackgroundRenderer {
     this.gl = this.canvas.getContext('webgl2', { alpha: true });
     if (!this.gl) throw new Error('WebGL2 Not Supported');
 
-    this.timerExt = this.gl.getExtension('EXT_disjoint_timer_query_webgl2');
-    this.timerExtMode = this.timerExt ? 'webgl2' : null;
-    if (!this.timerExt) {
-      const fallbackExt = this.gl.getExtension('EXT_disjoint_timer_query');
-      if (fallbackExt) {
-        this.timerExt = fallbackExt;
-        this.timerExtMode = 'webgl1';
-      }
-    }
-
-    if (this.timerExt) {
-      this.timingMode = 'gpu-ext';
-    } else {
-      this.timingMode = 'cpu-fallback';
-      this.cpuFallbackEnabled = true;
-    }
+    this.setupTimerSupport();
 
     this.geometry = new FullscreenGeometry(this.gl);
     const sources = await loadShaderSources();
@@ -266,6 +287,9 @@ export class BackgroundRenderer {
 
   render(time) {
     if (!this.gl || !this.isReady) return;
+    if (this.timingMode === 'none') {
+      this.setupTimerSupport();
+    }
     const data = this.store.data;
     const shouldRenderStar = data.starEnabled !== false && this.starPass;
     if (!shouldRenderStar) {
@@ -313,6 +337,7 @@ export class BackgroundRenderer {
       const cpuEnd = performance.now();
       this.lastGpuTimeMs = cpuEnd - cpuSampleStart;
       this.cpuFallbackAccumMs = 0;
+      this.debugTiming('CPU sample captured', this.lastGpuTimeMs);
     }
 
     this.compositePass.render(
@@ -377,8 +402,10 @@ export class BackgroundRenderer {
           : ext.getQueryObjectEXT(query, ext.QUERY_RESULT_EXT);
         this.lastGpuTimeMs = ns / 1e6;
         this.noGpuSampleAccumMs = 0;
+        this.debugTiming('GPU sample resolved', this.lastGpuTimeMs);
       } else {
         this.lastGpuTimeMs = null;
+        this.debugTiming('GPU disjoint detected — sample discarded');
       }
 
       if (this.timerExtMode === 'webgl2') {
@@ -429,6 +456,7 @@ export class BackgroundRenderer {
     this.cpuFallbackEnabled = true;
     this.cpuFallbackAccumMs = 0;
     this.noGpuSampleAccumMs = 0;
+    this.debugTiming('Disabling GPU timer support', reason);
     if (!this.gpuTimerWarningShown && reason) {
       this.gpuTimerWarningShown = true;
       console.warn(`[Themer] ${reason}`);
@@ -436,12 +464,20 @@ export class BackgroundRenderer {
   }
 
   getStarPassMs() {
-    return (this.timerExt && typeof this.lastGpuTimeMs === 'number' && isFinite(this.lastGpuTimeMs))
+    return (typeof this.lastGpuTimeMs === 'number' && isFinite(this.lastGpuTimeMs))
       ? this.lastGpuTimeMs
       : null;
   }
 
   getTimingMode() {
     return this.timingMode;
+  }
+
+  setTimingDebugEnabled(enabled) {
+    this.timingDebugEnabled = !!enabled;
+  }
+
+  isTimingDebugEnabled() {
+    return this.timingDebugEnabled;
   }
 }

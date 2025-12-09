@@ -13,6 +13,7 @@ const GROUPS = [
     keys: ['starZoom','starDensity','starTwinkle'],
     extraToggles: [
       { key: 'seamDebugEnabled', label: 'SeamDbg' },
+      { key: 'timingDebugEnabled', label: 'TimingDbg' },
     ]
   },
   {
@@ -20,11 +21,11 @@ const GROUPS = [
     description: 'Quick visual perf toggles',
     note: 'Flip card animations & paint effects while profiling FPS.',
     extraToggles: [
+      { key: 'hudDebugEnabled', label: 'CSS Debug' },
       { key: 'stylerWobbleEnabled', label: 'Wobble' },
       { key: 'stylerGradientEnabled', label: 'Gradients' },
       { key: 'stylerGlowEnabled', label: 'Glow' },
       { key: 'stylerRoleJadeEnabled', label: 'Jade' },
-      { key: 'hudDebugEnabled', label: 'HUD Debug' },
     ]
   }
 ];

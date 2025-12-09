@@ -26,7 +26,8 @@ canvas.cd-bgCanvas {
   transition: transform 0.26s ease, box-shadow 0.26s ease;
   --hue-fill: 240;
   --hue-border: 300;
-  animation: cd-floatNode 10s ease-in-out infinite;
+  --cd-wobble-animation: cd-floatNode 8s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+  animation: var(--cd-wobble-animation);
 }
 
 [data-styler]:hover {
@@ -41,7 +42,7 @@ canvas.cd-bgCanvas {
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.08),
     0 10px 35px rgba(2, 12, 10, 0.75);
-  animation: jade-breathe 8s ease-in-out infinite;
+  animation: var(--cd-wobble-animation), jade-breathe 8s ease-in-out infinite;
 }
 
 [data-styler="jade-card"]::before {
@@ -174,7 +175,23 @@ canvas.cd-bgCanvas {
   box-shadow: inset 0 0 0 1px rgba(145, 255, 216, 0.15), 0 8px 30px rgba(0,0,0,0.45);
 }
 
-@keyframes cd-floatNode { 0%,100%{transform:translateY(0px);} 50%{transform:translateY(-4px);} }
+@keyframes cd-floatNode {
+  0% {
+    transform: translate3d(0, -6px, 0) rotate(0deg) scale(1);
+  }
+  25% {
+    transform: translate3d(6px, 0, 0) rotate(-0.3deg) scale(1);
+  }
+  50% {
+    transform: translate3d(0, 6px, 0) rotate(0deg) scale(1);
+  }
+  75% {
+    transform: translate3d(-6px, 0, 0) rotate(0.3deg) scale(1);
+  }
+  100% {
+    transform: translate3d(0, -6px, 0) rotate(0deg) scale(1);
+  }
+}
 
 body.cd-styler-wobble-off [data-styler],
 body.cd-styler-wobble-off [data-styler="jade-card"] {

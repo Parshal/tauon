@@ -8,6 +8,8 @@ export class ThemerEngine {
     this.renderer = null;
     this.styler = null;
     this.ui = null;
+    this.unsubscribeTimingDebug = null;
+    this.handleTimingDebugUpdate = null;
     
     this.startTime = performance.now();
     this.isRunning = false;
@@ -38,10 +40,22 @@ export class ThemerEngine {
     // Observe the canvas specifically
     observer.observe(this.renderer.canvas);
     
+    this.handleTimingDebugUpdate = (data) => {
+      if (!this.renderer?.setTimingDebugEnabled) return;
+      const enabled = data?.timingDebugEnabled === true;
+      if (this.renderer.isTimingDebugEnabled?.() === enabled) return;
+      this.renderer.setTimingDebugEnabled(enabled);
+    };
+
+    this.handleTimingDebugUpdate(store.data);
+    this.ensureTimingDebugSubscription();
+
     this.start();
   }
 
   start() {
+    this.ensureTimingDebugSubscription();
+    this.handleTimingDebugUpdate?.(store.data);
     if (this.isRunning) return;
     this.isRunning = true;
     this.loop();
@@ -50,6 +64,15 @@ export class ThemerEngine {
   stop() {
     this.isRunning = false;
     if (this.rafId) cancelAnimationFrame(this.rafId);
+    if (this.unsubscribeTimingDebug) {
+      this.unsubscribeTimingDebug();
+      this.unsubscribeTimingDebug = null;
+    }
+  }
+
+  ensureTimingDebugSubscription() {
+    if (this.unsubscribeTimingDebug || !this.handleTimingDebugUpdate) return;
+    this.unsubscribeTimingDebug = store.subscribe(this.handleTimingDebugUpdate);
   }
 
   loop() {
@@ -69,8 +92,15 @@ export class ThemerEngine {
     }
     
     this.renderer.render(t);
-    if (this.ui && this.ui.setGpuTime && this.renderer && this.renderer.getStarPassMs) {
-      this.ui.setGpuTime(this.renderer.getStarPassMs());
+    if (this.ui?.setGpuTime && this.renderer?.getStarPassMs) {
+      const gpuTime = this.renderer.getStarPassMs();
+      if (this.renderer.isTimingDebugEnabled?.() === true) {
+        console.log('[Themer][Timing] HUD pipeline sample', {
+          timingMode: this.renderer.getTimingMode?.(),
+          gpuTime,
+        });
+      }
+      this.ui.setGpuTime(gpuTime);
     }
     if (this.styler) {
       this.styler.tick(delta);
