@@ -79,16 +79,14 @@ vec3 sampleStars(vec2 worldPos, vec2 starCell, float densityNorm, float twinkle)
 
 void main() {
     // Screen-space UV with aspect, centered, zoomed a bit like old shaders
-    float maxDim = max(max(u_res.x, u_res.y), 1.0);
-    vec2 aspect = vec2(u_res.x, u_res.y) / maxDim;
-    vec2 uv = (v_uv - 0.5) * aspect;
-    float zoomAtten = u_starZoom;
-    uv *= zoomAtten;
+    float minDim = max(min(u_res.x, u_res.y), 1.0);
+    vec2 aspect = vec2(u_res.x, u_res.y) / minDim;
+    vec2 uv = (v_uv - 0.5) * aspect * u_starZoom;
 
     float densityNorm = clamp(u_starDensity / 200.0, 0.0, 1.0);
     float twinkle = clamp(u_starTwinkle, 0.0, 1.0);
 
-    vec2 starUv = uv / aspect + 0.5;
+    vec2 starUv = uv + 0.5;
     vec2 starScaled = starUv * STAR_LATTICE;
     vec2 worldPos = wrapCell(starScaled);
     vec2 starCell = floor(worldPos);

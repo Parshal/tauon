@@ -69,6 +69,9 @@ export class ThemerEngine {
     }
     
     this.renderer.render(t);
+    if (this.ui && this.ui.setGpuTime && this.renderer && this.renderer.getStarPassMs) {
+      this.ui.setGpuTime(this.renderer.getStarPassMs());
+    }
     if (this.styler) {
       this.styler.tick(delta);
       this.styler.rescan(delta);

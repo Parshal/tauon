@@ -10,6 +10,7 @@ const FULLSCREEN_TRIANGLES = new Float32Array([
 ]);
 
 const STAR_UNIFORMS = ['zoom','starDensity','starTwinkle','starZoom'];
+const TIMER_QUERY_LIMIT = 4;
 
 class FullscreenGeometry {
   constructor(gl) {
@@ -184,6 +185,20 @@ export class BackgroundRenderer {
     this.dummyTexture = null;
     this.isReady = false;
     this.ready = this.init();
+
+    this.timerExt = null;
+    this.timerExtMode = null; // 'webgl2' or 'webgl1'
+    this.pendingTimerQueries = [];
+    this.activeTimerQuery = null;
+    this.lastGpuTimeMs = null;
+    this.timingMode = 'none'; // 'gpu-ext' | 'cpu-fallback' | 'none'
+    this.gpuSampleTimeoutMs = 2000;
+    this.noGpuSampleAccumMs = 0;
+    this.cpuFallbackIntervalMs = 500;
+    this.cpuFallbackAccumMs = 0;
+    this.lastPerfNowMs = null;
+    this.cpuFallbackEnabled = false;
+    this.gpuTimerWarningShown = false;
   }
 
   async init() {
@@ -193,6 +208,23 @@ export class BackgroundRenderer {
 
     this.gl = this.canvas.getContext('webgl2', { alpha: true });
     if (!this.gl) throw new Error('WebGL2 Not Supported');
+
+    this.timerExt = this.gl.getExtension('EXT_disjoint_timer_query_webgl2');
+    this.timerExtMode = this.timerExt ? 'webgl2' : null;
+    if (!this.timerExt) {
+      const fallbackExt = this.gl.getExtension('EXT_disjoint_timer_query');
+      if (fallbackExt) {
+        this.timerExt = fallbackExt;
+        this.timerExtMode = 'webgl1';
+      }
+    }
+
+    if (this.timerExt) {
+      this.timingMode = 'gpu-ext';
+    } else {
+      this.timingMode = 'cpu-fallback';
+      this.cpuFallbackEnabled = true;
+    }
 
     this.geometry = new FullscreenGeometry(this.gl);
     const sources = await loadShaderSources();
@@ -235,10 +267,53 @@ export class BackgroundRenderer {
   render(time) {
     if (!this.gl || !this.isReady) return;
     const data = this.store.data;
-    const starEnabled = data.starEnabled !== false;
-    const starTex = starEnabled && this.starPass
+    const shouldRenderStar = data.starEnabled !== false && this.starPass;
+    if (!shouldRenderStar) {
+      this.lastGpuTimeMs = null;
+    }
+
+    const nowMs = performance.now();
+    if (this.lastPerfNowMs === null) this.lastPerfNowMs = nowMs;
+    const deltaMs = nowMs - this.lastPerfNowMs;
+    this.lastPerfNowMs = nowMs;
+
+    if (this.timingMode === 'gpu-ext') {
+      this.resolveTimerQueries();
+      this.noGpuSampleAccumMs += deltaMs;
+      if (this.noGpuSampleAccumMs > this.gpuSampleTimeoutMs) {
+        this.disableGpuTimerSupport('GPU timer queries never resolved; falling back to CPU timing');
+      }
+    } else if (this.timingMode === 'cpu-fallback') {
+      this.cpuFallbackAccumMs += deltaMs;
+    }
+
+    const canSample = shouldRenderStar
+      && this.timingMode === 'gpu-ext'
+      && this.timerExt
+      && !this.activeTimerQuery
+      && this.pendingTimerQueries.length < TIMER_QUERY_LIMIT;
+
+    const useCpuSample = shouldRenderStar
+      && this.timingMode === 'cpu-fallback'
+      && this.cpuFallbackAccumMs >= this.cpuFallbackIntervalMs;
+
+    if (canSample) this.beginStarTimer();
+    let cpuSampleStart = null;
+    if (useCpuSample) {
+      cpuSampleStart = performance.now();
+    }
+
+    const starTex = shouldRenderStar
       ? (this.starPass.render(time, data) ?? this.dummyTexture)
       : this.dummyTexture;
+
+    if (canSample) this.endStarTimer();
+    if (useCpuSample) {
+      this.gl.finish();
+      const cpuEnd = performance.now();
+      this.lastGpuTimeMs = cpuEnd - cpuSampleStart;
+      this.cpuFallbackAccumMs = 0;
+    }
 
     this.compositePass.render(
       this.canvas.width,
@@ -249,5 +324,124 @@ export class BackgroundRenderer {
         fallback: this.dummyTexture,
       }
     );
+  }
+
+  beginStarTimer() {
+    const ext = this.timerExt;
+    if (!ext || this.activeTimerQuery) return;
+
+    if (this.timerExtMode === 'webgl2') {
+      const query = this.gl.createQuery();
+      if (!query) return;
+      this.activeTimerQuery = query;
+      this.gl.beginQuery(ext.TIME_ELAPSED_EXT, query);
+    } else {
+      const query = ext.createQueryEXT();
+      if (!query) return;
+      this.activeTimerQuery = query;
+      ext.beginQueryEXT(ext.TIME_ELAPSED_EXT, query);
+    }
+  }
+
+  endStarTimer() {
+    const ext = this.timerExt;
+    if (!ext || !this.activeTimerQuery) return;
+    if (this.timerExtMode === 'webgl2') {
+      this.gl.endQuery(ext.TIME_ELAPSED_EXT);
+    } else {
+      ext.endQueryEXT(ext.TIME_ELAPSED_EXT);
+    }
+    this.pendingTimerQueries.push(this.activeTimerQuery);
+    this.activeTimerQuery = null;
+  }
+
+  resolveTimerQueries() {
+    const ext = this.timerExt;
+    if (!ext || !this.pendingTimerQueries.length) return;
+    const disjoint = this.gl.getParameter(ext.GPU_DISJOINT_EXT);
+
+    while (this.pendingTimerQueries.length) {
+      const query = this.pendingTimerQueries[0];
+      let available = false;
+      if (this.timerExtMode === 'webgl2') {
+        available = this.gl.getQueryParameter(query, this.gl.QUERY_RESULT_AVAILABLE);
+      } else {
+        available = ext.getQueryObjectEXT(query, ext.QUERY_RESULT_AVAILABLE_EXT);
+      }
+      if (!available) break;
+      this.pendingTimerQueries.shift();
+
+      if (!disjoint) {
+        const ns = this.timerExtMode === 'webgl2'
+          ? this.gl.getQueryParameter(query, this.gl.QUERY_RESULT)
+          : ext.getQueryObjectEXT(query, ext.QUERY_RESULT_EXT);
+        this.lastGpuTimeMs = ns / 1e6;
+        this.noGpuSampleAccumMs = 0;
+      } else {
+        this.lastGpuTimeMs = null;
+      }
+
+      if (this.timerExtMode === 'webgl2') {
+        this.gl.deleteQuery(query);
+      } else {
+        ext.deleteQueryEXT(query);
+      }
+    }
+
+    if (disjoint) {
+      this.pendingTimerQueries.length = 0;
+      if (this.activeTimerQuery) {
+        if (this.timerExtMode === 'webgl2') {
+          this.gl.endQuery(ext.TIME_ELAPSED_EXT);
+          this.gl.deleteQuery(this.activeTimerQuery);
+        } else {
+          ext.endQueryEXT(ext.TIME_ELAPSED_EXT);
+          ext.deleteQueryEXT(this.activeTimerQuery);
+        }
+        this.activeTimerQuery = null;
+      }
+    }
+  }
+
+  disableGpuTimerSupport(reason) {
+    if (this.timingMode !== 'gpu-ext') return;
+    const ext = this.timerExt;
+    if (this.timerExtMode === 'webgl2') {
+      if (this.activeTimerQuery) {
+        this.gl.deleteQuery(this.activeTimerQuery);
+      }
+      this.pendingTimerQueries.forEach(query => {
+        if (query) this.gl.deleteQuery(query);
+      });
+    } else if (ext) {
+      if (this.activeTimerQuery) {
+        ext.deleteQueryEXT(this.activeTimerQuery);
+      }
+      this.pendingTimerQueries.forEach(query => {
+        if (query) ext.deleteQueryEXT(query);
+      });
+    }
+    this.pendingTimerQueries = [];
+    this.activeTimerQuery = null;
+    this.timerExt = null;
+    this.timerExtMode = null;
+    this.timingMode = 'cpu-fallback';
+    this.cpuFallbackEnabled = true;
+    this.cpuFallbackAccumMs = 0;
+    this.noGpuSampleAccumMs = 0;
+    if (!this.gpuTimerWarningShown && reason) {
+      this.gpuTimerWarningShown = true;
+      console.warn(`[Themer] ${reason}`);
+    }
+  }
+
+  getStarPassMs() {
+    return (this.timerExt && typeof this.lastGpuTimeMs === 'number' && isFinite(this.lastGpuTimeMs))
+      ? this.lastGpuTimeMs
+      : null;
+  }
+
+  getTimingMode() {
+    return this.timingMode;
   }
 }

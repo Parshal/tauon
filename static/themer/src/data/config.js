@@ -8,6 +8,11 @@ export const PARAMS = [
 export const PASS_FLAGS = {
   starEnabled: true,
   seamDebugEnabled: false,
+  stylerWobbleEnabled: true,
+  stylerGradientEnabled: true,
+  stylerGlowEnabled: true,
+  stylerRoleJadeEnabled: true,
+  hudDebugEnabled: false,
 };
 
 export const PASS_FLAG_KEYS = Object.keys(PASS_FLAGS);
