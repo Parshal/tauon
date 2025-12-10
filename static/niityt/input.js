@@ -1,5 +1,8 @@
 import { computeSquareLayout, mapScreenToSquare } from './layout.js';
 
+const HUD_ICON_LIMIT = 4;
+const TOOLBELT_SLOTS_PER_SIDE = HUD_ICON_LIMIT;
+
 export class InputController {
   constructor(canvas, state) {
     this.canvas = canvas;
@@ -56,6 +59,9 @@ export class InputController {
 
   handlePointerDown(event) {
     if (event.button !== 0) return;
+    if (this.handleToolbeltClick(event)) {
+      return;
+    }
     this.pointerDown = true;
     this.handlePointerMove(event);
     this.state.attemptPlaceActivePointer();
@@ -72,6 +78,53 @@ export class InputController {
   resetPointer() {
     this.pointerActive = false;
     this.state.clearPointer();
+  }
+
+  handleToolbeltClick(event) {
+    const rect = this.canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) {
+      return false;
+    }
+
+    const rawU = (event.clientX - rect.left) / rect.width;
+    const rawV = (event.clientY - rect.top) / rect.height;
+    const layout = computeSquareLayout(rect.width, rect.height);
+
+    const insideVertical = rawV >= layout.playMinY && rawV <= layout.playMaxY;
+    if (!insideVertical) {
+      return false;
+    }
+
+    const gutterLeft = layout.gutterLeft;
+    const gutterRight = layout.gutterRight;
+
+    let isRight = false;
+    let railU = 0;
+    let railV = (rawV - layout.playMinY) / layout.playSizeY;
+
+    if (gutterLeft > 0 && rawU < layout.playMinX) {
+      railU = gutterLeft > 0 ? rawU / gutterLeft : 0;
+    } else if (gutterRight > 0 && rawU > layout.playMaxX) {
+      isRight = true;
+      railU = gutterRight > 0 ? (rawU - layout.playMaxX) / gutterRight : 0;
+    } else {
+      return false;
+    }
+
+    if (!Number.isFinite(railU) || !Number.isFinite(railV)) {
+      return false;
+    }
+
+    const u = Math.min(Math.max(railU, 0), 1);
+    const v = Math.min(Math.max(railV, 0), 1);
+
+    const row = Math.floor(v * HUD_ICON_LIMIT);
+    const clampedRow = Math.min(Math.max(row, 0), HUD_ICON_LIMIT - 1);
+
+    const baseIndex = isRight ? TOOLBELT_SLOTS_PER_SIDE : 0;
+    const slotIndex = baseIndex + clampedRow;
+    this.state.setActiveSlot(slotIndex);
+    return true;
   }
 
   handleWheel(event) {
@@ -94,6 +147,8 @@ export class InputController {
       this.state.shiftActiveSlot(-1);
     } else if (key === 'e' || key === 'E') {
       this.state.shiftActiveSlot(1);
+    } else if (key === 'f' || key === 'F') {
+      this.state.attemptDropFertilizerAtPointer();
     }
   }
 }

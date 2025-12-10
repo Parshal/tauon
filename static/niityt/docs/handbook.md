@@ -1,5 +1,5 @@
 # Niityt Living Handbook
-_Last refreshed: 2025-12-10c (run f — update this stamp every run)_
+_Last refreshed: 2025-12-10d (run f — update this stamp every run)_
 
 This handbook is the single source of truth for both humans and copilots. It merges the invocation prompt, onboarding primer, and the most recent architecture snapshot so every refresh carries forward context while staying token-efficient. Keep it self-evolving across every section and workflow described here.
 
@@ -68,7 +68,7 @@ Niityt is a self-contained prototype where the entire HUD, grid, and feedback lo
 
 ### What You Get
 - 128×128 proto-grid simulated on the client, with adjustable resolution via `ProtoState`. @static/niityt/state.js#1-206
-- WebGL2 renderer that streams the grid as an `R8` texture, remaps it into a centered square, and paints band/energy/power-up telemetry entirely in-shader. @static/niityt/renderer.js#51-320 @static/niityt/shaders/grid.frag.glsl#1-177
+- WebGL2 renderer that streams the grid as an `R8` texture, remaps it into a centered square, and paints band/energy telemetry entirely in-shader. @static/niityt/renderer.js#51-320 @static/niityt/shaders/grid.frag.glsl#1-177
 - Pointer + control interactions handled purely inside the canvas—no DOM HUD—thanks to layout-aware input routing. @static/niityt/input.js#1-70 @static/niityt/layout.js#1-52
 - Color-capture + eight-slot toolbelt inventory mirrored into gutter rails, including the fertilizer meter and recent-pickup glow to signal fresh pigments. @static/niityt/state.js#22-395 @static/niityt/renderer.js#117-470 @static/niityt/shaders/grid.frag.glsl#1-229
 - Optional WASM core (`wasm/niityt-core`) that mirrors the JS logic for future perf work. @wasm/niityt-core/src/lib.rs#1-235
@@ -76,7 +76,7 @@ Niityt is a self-contained prototype where the entire HUD, grid, and feedback lo
 
 ### Quick Tour
 - `main.js` finds every `.niityt-canvas`, instantiates `ProtoState`, `NiitytRenderer`, and `InputController`, then ticks RAF forever. @static/niityt/main.js#1-50
-- `state.js` handles energy costs, spread rates, pigment harvesting, fertilizer gains, eight-slot toolbelt stacks, HUD descriptors, and power-up timers. @static/niityt/state.js#1-395
+- `state.js` handles energy costs, spread rates, pigment harvesting, fertilizer gains, eight-slot toolbelt stacks, and HUD descriptors. @static/niityt/state.js#1-395
 - `layout.js` computes the centered square + gutters and gives helpers for clamped pointer UV mapping. @static/niityt/layout.js#1-52
 - `renderer.js` loads GLSL shaders, uploads the grid texture, sends square min/max + HUD arrays, and draws fullscreen triangles. @static/niityt/renderer.js#72-320
 - `input.js` maps pointer events to square UVs, tracks drag placement, deactivates when leaving the canvas, and now listens for wheel/number-key shortcuts to cycle toolbelt slots. @static/niityt/input.js#1-99
@@ -99,8 +99,8 @@ Niityt is a self-contained prototype where the entire HUD, grid, and feedback lo
 ### HUD Layout Direction (Square Playfield)
 - **Render everything in-canvas.** Keep the “single WebGL UI” pledge by painting HUD rails, playfield, and chrome inside the same WebGL pass; no DOM-side panels. @templates/components/niityt.html#1-17 @static/css/niityt.css#1-28
 - **Square playable core.** The infection grid occupies a centered square regardless of aspect ratio. Renderer feeds `u_squareMin/max` and the shader remaps sample UVs into that region, so DPR/resizes stay crisp. @static/niityt/renderer.js#154-320 @static/niityt/shaders/grid.frag.glsl#47-175
-- **Icon gutters.** Left rail shows energy + spread fills; right rail highlights power-up and growth-boost status using uniform arrays. Future slots can surface diagnostics or WASM parity indicators. @static/niityt/state.js#190-231 @static/niityt/shaders/grid.frag.glsl#91-175
-- **Pointer routing.** Input clamps screen UVs into the square before mapping to grid coordinates, ensuring placements stay inside the bottom control band even when gutters expand. @static/niityt/input.js#28-69 @static/niityt/state.js#143-177
+- **Icon gutters + toolbelt.** Left rail shows normalized energy/fertilizer/spread icons layered with the first four toolbelt slots; right rail hosts the remaining slots and future diagnostics/boost cues, all rendered through the same `renderToolbeltRail()` geometry. @static/niityt/state.js#239-321 @static/niityt/renderer.js#439-477 @static/niityt/shaders/grid.frag.glsl#168-265
+- **Pointer routing.** Input clamps screen UVs into the square before mapping to grid coordinates, while `ProtoState` further gates `placeControl()` through the reach mask and energy checks; you can only plant on in-reach, empty cells even as gutters and aspect ratio shift. @static/niityt/input.js#37-58 @static/niityt/state.js#168-201 @static/niityt/state.js#333-380
 - **Next implementation steps.**
   - Feed gutter hover metrics back into `InputController` once gutters gain interactions.
   - Capture screenshots/gifs once HUD rails feel stable.
@@ -108,8 +108,8 @@ Niityt is a self-contained prototype where the entire HUD, grid, and feedback lo
 
 ---
 
-## 3. Snapshot (2025-12-10c)
-_Supersedes the HUD-only snapshot (2025-12-10b) by capturing pigment harvesting, toolbelt HUD rails, fertilizer meters, slot selection UX, and shader pickup glows._
+## 3. Snapshot (2025-12-10d)
+_Supersedes the HUD-centric snapshot (2025-12-10c) by capturing fertilizer boosts, reach visualization, and the refined fertilizer HUD counter._
 
 > Snapshot cue: keep pigment/toolbelt IDs, shader palettes, and renderer uniform contracts synchronized whenever inventories change.
 
@@ -122,10 +122,10 @@ _Supersedes the HUD-only snapshot (2025-12-10b) by capturing pigment harvesting,
 ### Runtime Flow
 1. **Discovery.** `bootstrapAll()` queries `.niityt-canvas`, skips already-mounted nodes, and awaits `mountNiityt()` promises. @static/niityt/main.js#33-48
 2. **Initialization.** `mountNiityt()` creates `ProtoState`, `NiitytRenderer`, and `InputController`, awaits shader program compilation, and seeds `lastTime` for delta clamping (≤0.2 s). @static/niityt/main.js#7-30
-3. **Frame loop.** Each RAF tick computes `delta`, advances `state.tick(delta)` (regen, spread, healing, power-ups), and hands `renderer.render()` the payload plus `input.pointerActive`. @static/niityt/main.js#18-29 @static/niityt/state.js#28-118
-4. **State → renderer contract.** `getRenderPayload()` ships the grid + pigment textures, band height, energy norm, pointer cell, power-up coords, growth boost flag, HUD arrays, toolbelt slices, fertilizer meter, and recent pickup metadata for shader glows. @static/niityt/state.js#209-236
+3. **Frame loop.** Each RAF tick computes `delta`, advances `state.tick(delta)` (regen, spread, healing), and hands `renderer.render()` the payload plus `input.pointerActive`. @static/niityt/main.js#18-29 @static/niityt/state.js#28-118
+4. **State → renderer contract.** `getRenderPayload()` ships the grid + pigment textures, band height, energy norm, pointer cell, HUD arrays, toolbelt slices, fertilizer meter (both normalized and raw count), and recent pickup metadata for shader glows. @static/niityt/state.js#209-236
 5. **Renderer duties.** `NiitytRenderer` uploads textures, caches uniform locations (including square min/max + HUD arrays), updates layouts on resize, and draws fullscreen triangles. @static/niityt/renderer.js#93-320
-6. **Shader branching.** `grid.frag.glsl` differentiates square playfield vs. gutters: square draws infection pixels, band pulses, pointer glow, and power-up sparks; gutters draw slot rails driven by HUD arrays. @static/niityt/shaders/grid.frag.glsl#27-175
+6. **Shader branching.** `grid.frag.glsl` differentiates square playfield vs. gutters: square draws infection pixels, band pulses, and pointer glow; gutters draw slot rails driven by HUD arrays. @static/niityt/shaders/grid.frag.glsl#27-175
 
 ### Renderer & Shader Notes
 | Concept | Source | Details |
@@ -134,19 +134,22 @@ _Supersedes the HUD-only snapshot (2025-12-10b) by capturing pigment harvesting,
 | Texture pipeline | @static/niityt/renderer.js#134-208 | Grid uploaded as `R8` using `texImage2D` on size changes and `texSubImage2D` otherwise; nearest filtering keeps pixels sharp. |
 | Layout uniforms | @static/niityt/renderer.js#168-320 | Renderer recomputes `computeSquareLayout()` per resize and feeds `u_squareMin/u_squareMax` so shaders can remap UVs. |
 | HUD arrays | @static/niityt/renderer.js#291-316 | Two `Float32Array` buffers (left/right) + counts flow into `u_hud*` uniforms; renderer falls back to zeroed arrays if state does not supply them. |
-| Pointer/power cues | @static/niityt/renderer.js#262-289 @static/niityt/shaders/grid.frag.glsl#75-158 | Pointer UV/power-up UV convert grid cells into screen UVs; shader overlays glow/spark passes gated by `u_pointerActive` + `u_powerUpActive`. |
-| Gutter rails | @static/niityt/shaders/grid.frag.glsl#91-175 | `renderRail()` splits gutters into slot bands (up to `HUD_ICON_LIMIT`) and fills them according to normalized values (energy/spread left, power/boost right). |
-| Toolbelt + pigment pickups | @static/niityt/renderer.js#308-466 @static/niityt/shaders/grid.frag.glsl#124-189 | Toolbelt slices (fill, color IDs, active flags, stack counts) and fertilizer/pickup uniforms (`u_fertilizerNorm`, `u_recentPickup*`) drive gutter slot fills, stack tick marks, and glow cues when a pigment is freshly collected. |
+| Pointer cues | @static/niityt/renderer.js#262-289 @static/niityt/shaders/grid.frag.glsl#75-158 | Pointer UV converts grid cells into screen UVs; the shader overlays a reduced-intensity pointer glow gated by `u_pointerActive`. |
+| Gutter rails | @static/niityt/shaders/grid.frag.glsl#91-175 | `renderToolbeltRail()` splits gutters into slot bands (up to `HUD_ICON_LIMIT`) and fills them according to normalized values (energy/fertilizer/spread on the left, toolbelt slots on both sides). |
+| Reach mask & brightness | @static/niityt/state.js#333-380 @static/niityt/renderer.js#304-320 @static/niityt/shaders/grid.frag.glsl#273-295 | `updateReachField()` writes a reach texture that both gates placements and brightens in-reach cells in the shader, making viable territory legible without extra HUD chrome. |
+| Toolbelt + pigment pickups | @static/niityt/renderer.js#308-466 @static/niityt/shaders/grid.frag.glsl#124-189 | Toolbelt slices (fill, color IDs, active flags, stack counts) and fertilizer/pickup uniforms (`u_fertilizerNorm`, `u_recentPickup*`) drive gutter slot fills, stack ticks, pickup glows, and the fertilizer counter overlay. |
+| Fertilizer boost halo | @static/niityt/state.js#79-143 @static/niityt/renderer.js#318-517 @static/niityt/shaders/grid.frag.glsl#292-307 | A `fertilizerBoost` descriptor (center UV, radius, strength, color ID) feeds uniforms (`u_fertilizerBoost*`); the fragment shader renders a debug-friendly dark halo over the boosted region whose falloff roughly matches the mechanical radius. |
 
 ### State & Mechanics
-- **Energy economy.** Control placements cost 12 energy; regen is 6 / s with a small claimed-cell bonus, capped at 120. @static/niityt/state.js#1-44
-- **Spread + healing.** Each tick samples up to `SPREAD_SAMPLES * dt * (bonus × growthMultiplier)` neighbors. Empty targets get seeded with decayed value; existing cells get occasional reinforcement; claimed cells heal up to +6 per tick. @static/niityt/state.js#48-118
-- **Power-ups.** Every ~10 s an empty cell may spawn a spark; consuming it starts a 6 s growth multiplier tracked via `growthMultiplierTimer`. Renderer highlights the spark and band pulses accordingly. @static/niityt/state.js#59-118 @static/niityt/shaders/grid.frag.glsl#83-158
-- **Pointer gating.** `setPointerFromUV()` clamps normalized UVs into grid coords; `placeControl()` rejects placements above the control band or on occupied cells. @static/niityt/state.js#143-177
-- **HUD descriptors.** `buildHudDescriptors()` normalizes energy/spread (left rail) and power/boost state (right rail) into fixed-length float arrays passed to the renderer. @static/niityt/state.js#209-231
-- **Pigment layer + fertilizer.** `generatePigmentLayer()` paints the ground with fertilizer nodes and six pigment IDs; harvesting fertilizer increments `this.fertilizer` (capped at 80) and feeds the HUD meter. @static/niityt/state.js#264-305
-- **Toolbelt stacks + selection.** Harvested pigments fill eight slots, auto-stacking matching colors up to 12, with stack counts, fill %, and active-slot flags encoded per side for the shader rails. Scroll wheel or `1-8`/`Q`/`E` shortcuts rotate the active slot. @static/niityt/state.js#306-395 @static/niityt/input.js#77-97
-- **WASM parity.** Rust mirrors grid size, energy, spread, and placement rules (minus HUD + power-up plumbing) for potential perf toggles. @wasm/niityt-core/src/lib.rs#3-235
+- **Energy economy.** Control placements cost 12 energy; regen is 6/s with a small claimed-cell bonus, capped at 120. @static/niityt/state.js#1-44
+- **Spread + healing.** Each tick samples up to `SPREAD_SAMPLES * dt * bonus` neighbors (bonus scales with claimed cells). Empty targets get seeded with decayed value; existing cells get occasional reinforcement; claimed cells heal up to +6 per tick. @static/niityt/state.js#48-118
+- **Pointer + reach gating.** `setPointerFromUV()` clamps normalized UVs into grid coords; `placeControl()` delegates to `isCellInReach()` so you can only plant on in-reach, empty cells with enough energy, decoupling placement rules from a hard control-band threshold. @static/niityt/state.js#168-201 @static/niityt/state.js#333-380
+- **Reach field.** `updateReachField()` runs a small-radius flood fill from the bottom row and all claimed cells, producing a `reach` mask that both gates placement and drives a subtle brightness lift in the shader, hinting at where new controls are allowed to grow. @static/niityt/state.js#333-380 @static/niityt/shaders/grid.frag.glsl#273-295
+- **HUD descriptors.** `buildHudDescriptors()` normalizes energy, fertilizer, and spread into left-rail icon fills and leaves the right rail available for diagnostics/boost cues. @static/niityt/state.js#301-308
+- **Pigment layer + fertilizer.** `generatePigmentLayer()` places 20 white fertilizer seeds plus one of each pigment variant; harvesting fertilizer increments a single global `fertilizer` counter (capped at 80) that drives the fertilizer slot HUD counter. @static/niityt/state.js#381-441
+- **Toolbelt slots + selection.** Eight toolbelt slots live across the gutters: a locked base meadow tool, a locked fertilizer slot, and pigment unlocks. Slots are encoded into left/right descriptors for the shader; scroll wheel, `1-8`, and `Q/E` rotate selection, and clicking on either rail selects a slot. @static/niityt/state.js#468-488 @static/niityt/input.js#83-128
+- **Fertilizer boosts.** Dropping fertilizer (`dropFertilizer()` via `F` at the pointer) consumes one global fertilizer, anchors a `fertilizerBoost` around the chosen cell, and temporarily increases local spread/reinforcement probabilities inside a radius tuned by `FERTILIZER_BOOST_RADIUS`; the boost strength decays over `FERTILIZER_BOOST_DURATION` seconds. @static/niityt/state.js#79-143
+- **WASM parity.** Rust mirrors grid size, energy, spread, and placement rules (minus HUD/toolbelt plumbing) for potential perf toggles. @wasm/niityt-core/src/lib.rs#3-235
 
 ### Layout & HUD Surfaces
 - `computeSquareLayout()` derives the centered square, gutter padding, and normalized play region; `mapScreenToSquare()` clamps pointer UVs before translating to square UVs. @static/niityt/layout.js#1-52
@@ -170,7 +173,7 @@ _Supersedes the HUD-only snapshot (2025-12-10b) by capturing pigment harvesting,
 - **Slot UX controls.** `InputController` listens for wheel deltas and `1-8/Q/E` hotkeys to flip the active toolbelt slot without touching the HUD DOM. @static/niityt/input.js#77-97
 
 ### Open Questions / TODOs / AI Generated ideas
-- [x] Document the GLSL shader structure (square mapping, band pulses, pointer/power cues, rail fills) inside this handbook; add screenshots later for visual verification. @static/niityt/shaders/grid.frag.glsl#47-175
+- [x] Document the GLSL shader structure (square mapping, band pulses, pointer cues, rail fills) inside this handbook; add screenshots later for visual verification. @static/niityt/shaders/grid.frag.glsl#47-175
 - [ ] Decide whether JS or WASM state is the source of truth, then expose a feature flag in `main.js` to toggle implementations for perf testing. @static/niityt/main.js#7-30 @wasm/niityt-core/src/lib.rs#1-235
 - [ ] Add keyboard/touch affordances (e.g., spacebar placement, multitouch) plus updated accessibility notes in the template. @static/niityt/input.js#1-70 @templates/components/niityt.html#1-17
 - [ ] Surface gutter-hover telemetry (e.g., ability descriptions) without breaking the canvas-only aesthetic—consider subtle shader text or DOM overlays that mirror canvas visuals.

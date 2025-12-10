@@ -70,6 +70,7 @@ export class NiitytRenderer {
     this.vao = null;
     this.gridTexture = null;
     this.cellColorTexture = null;
+    this.reachTexture = null;
     this.gridWidth = 0;
     this.gridHeight = 0;
     this.cellColorWidth = 0;
@@ -122,13 +123,11 @@ export class NiitytRenderer {
       'u_time',
       'u_enableTexture',
       'u_cellColors',
+      'u_reach',
       'u_bandHeight',
       'u_energyNorm',
       'u_pointerUv',
       'u_pointerActive',
-      'u_powerUpUv',
-      'u_powerUpActive',
-      'u_growthBoostActive',
       'u_squareMin',
       'u_squareMax',
       'u_hudLeftValues',
@@ -143,9 +142,14 @@ export class NiitytRenderer {
       'u_toolbeltRightColors',
       'u_toolbeltRightActive',
       'u_toolbeltRightStacks',
+      'u_fertilizerCount',
       'u_fertilizerNorm',
       'u_recentPickupColor',
-      'u_recentPickupStrength'
+      'u_recentPickupStrength',
+      'u_fertilizerBoostCenterUv',
+      'u_fertilizerBoostRadius',
+      'u_fertilizerBoostStrength',
+      'u_fertilizerBoostColorId'
     ];
     this.uniforms = names.reduce((map, name) => {
       map[name] = gl.getUniformLocation(this.program, name);
@@ -179,6 +183,15 @@ export class NiitytRenderer {
 
     this.cellColorTexture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.cellColorTexture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+
+    this.reachTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.reachTexture);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -288,6 +301,24 @@ export class NiitytRenderer {
     this.cellTextureReady = true;
   }
 
+  uploadReach(reachMask, width, height) {
+    const gl = this.gl;
+    if (!gl || !reachMask) return;
+    gl.bindTexture(gl.TEXTURE_2D, this.reachTexture);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.R8,
+      width,
+      height,
+      0,
+      gl.RED,
+      gl.UNSIGNED_BYTE,
+      reachMask
+    );
+    gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+
   render(payload) {
     const gl = this.gl;
     if (!gl) return;
@@ -302,15 +333,15 @@ export class NiitytRenderer {
       pointerActive,
       bandHeightNorm,
       energyNorm,
-      powerUpCell,
-      powerUpActive,
-      growthBoostActive,
       hudLeftIcons,
       hudRightIcons,
       toolbeltLeft,
       toolbeltRight,
       fertilizerNorm,
-      recentPickup
+      fertilizerCount,
+      recentPickup,
+      reachMask,
+      fertilizerBoost
     } = payload;
 
     const layout = this.layout || computeSquareLayout(this.canvas.clientWidth || 1, this.canvas.clientHeight || 1);
@@ -320,6 +351,9 @@ export class NiitytRenderer {
     }
     if (cellColors) {
       this.uploadCellColors(cellColors, width, height);
+    }
+    if (reachMask) {
+      this.uploadReach(reachMask, width, height);
     }
 
     gl.disable(gl.DEPTH_TEST);
@@ -336,6 +370,13 @@ export class NiitytRenderer {
     gl.bindTexture(gl.TEXTURE_2D, this.cellColorTexture);
     if (this.uniforms.u_cellColors) {
       gl.uniform1i(this.uniforms.u_cellColors, 1);
+    }
+    gl.activeTexture(gl.TEXTURE0);
+
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.reachTexture);
+    if (this.uniforms.u_reach) {
+      gl.uniform1i(this.uniforms.u_reach, 2);
     }
     gl.activeTexture(gl.TEXTURE0);
 
@@ -366,22 +407,6 @@ export class NiitytRenderer {
     }
     if (this.uniforms.u_pointerActive) {
       gl.uniform1f(this.uniforms.u_pointerActive, pointerActive ? 1.0 : 0.0);
-    }
-
-    if (this.uniforms.u_powerUpUv) {
-      let powerUvX = 0.0;
-      let powerUvY = 0.0;
-      if (powerUpCell) {
-        powerUvX = (powerUpCell.x + 0.5) / width;
-        powerUvY = (powerUpCell.y + 0.5) / height;
-      }
-      gl.uniform2f(this.uniforms.u_powerUpUv, powerUvX, powerUvY);
-    }
-    if (this.uniforms.u_powerUpActive) {
-      gl.uniform1f(this.uniforms.u_powerUpActive, powerUpActive ? 1.0 : 0.0);
-    }
-    if (this.uniforms.u_growthBoostActive) {
-      gl.uniform1f(this.uniforms.u_growthBoostActive, growthBoostActive ? 1.0 : 0.0);
     }
 
     if (this.uniforms.u_squareMin) {
@@ -456,6 +481,11 @@ export class NiitytRenderer {
       gl.uniform1f(this.uniforms.u_fertilizerNorm, fert);
     }
 
+    if (this.uniforms.u_fertilizerCount) {
+      const fertCount = Number.isFinite(fertilizerCount) ? fertilizerCount : 0;
+      gl.uniform1f(this.uniforms.u_fertilizerCount, fertCount);
+    }
+
     if (this.uniforms.u_recentPickupColor) {
       const pickupColor = recentPickup?.colorId || 0;
       gl.uniform1f(this.uniforms.u_recentPickupColor, pickupColor);
@@ -463,6 +493,27 @@ export class NiitytRenderer {
     if (this.uniforms.u_recentPickupStrength) {
       const pickupStrength = clamp01(recentPickup?.strength || 0);
       gl.uniform1f(this.uniforms.u_recentPickupStrength, pickupStrength);
+    }
+
+    const boost = fertilizerBoost || {};
+    const center = boost.centerUv || null;
+    const boostU = center && Number.isFinite(center.u) ? center.u : 0.5;
+    const boostV = center && Number.isFinite(center.v) ? center.v : 0.5;
+    const boostStrength = clamp01(boost.strength || 0);
+    const boostRadius = Number.isFinite(boost.radiusNorm) ? boost.radiusNorm : 0;
+    const boostColorId = Number.isFinite(boost.colorId) ? boost.colorId : 0;
+
+    if (this.uniforms.u_fertilizerBoostCenterUv) {
+      gl.uniform2f(this.uniforms.u_fertilizerBoostCenterUv, boostU, boostV);
+    }
+    if (this.uniforms.u_fertilizerBoostRadius) {
+      gl.uniform1f(this.uniforms.u_fertilizerBoostRadius, boostRadius);
+    }
+    if (this.uniforms.u_fertilizerBoostStrength) {
+      gl.uniform1f(this.uniforms.u_fertilizerBoostStrength, boostStrength);
+    }
+    if (this.uniforms.u_fertilizerBoostColorId) {
+      gl.uniform1f(this.uniforms.u_fertilizerBoostColorId, boostColorId);
     }
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);

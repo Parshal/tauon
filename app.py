@@ -232,5 +232,7 @@ def niityt_demo():
 
 
 if __name__ == "__main__":
-    print("Clickety (control) click --> http://127.0.0.1:8000/niityt <-- to jump in to game.")
+    print("#/¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯\\#")
+    print("#| Clickety (control) click --> http://127.0.0.1:8000/niityt <-- to jump in to game. |#")
+    print("#\\___________________________________________________________________________________/#")
     app.run(host="127.0.0.1", port=8000, debug=True)

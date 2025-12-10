@@ -1,14 +1,14 @@
 const CONTROL_COST = 12;
 const ENERGY_CAP = 120;
 const BASE_CHARGE_RATE = 6; // energy per second
-const SPREAD_SAMPLES = 60;
-const POWER_UP_RESPAWN = 10; // seconds between spawn attempts
-const POWER_UP_DURATION = 6; // seconds of doubled growth
+const SPREAD_SAMPLES = 500;
 const HUD_ICON_LIMIT = 4;
 const TOOLBELT_SLOT_COUNT = 8;
 const TOOLBELT_SLOTS_PER_SIDE = TOOLBELT_SLOT_COUNT / 2;
 const TOOLBELT_STACK_CAP = 12;
 const FERTILIZER_MAX = 80;
+const FERTILIZER_BOOST_DURATION = 30;
+const FERTILIZER_BOOST_RADIUS = 6;
 const PIGMENT_NONE = 0;
 const PIGMENT_FERTILIZER = 1;
 const PIGMENT_BASE = 0;
@@ -31,26 +31,26 @@ export class ProtoState {
     this.pointerCell = null;
     this.claimedIndices = [];
     this.time = 0;
-    this.powerUpIndex = null;
-    this.powerUpRespawnTimer = 1.5;
-    this.growthMultiplierTimer = 0;
     this.toolbelt = Array.from({ length: TOOLBELT_SLOT_COUNT }, () => null);
     this.activeSlotIndex = 0;
     this.fertilizer = 0;
+    this.lastNonFertilizerColorId = PIGMENT_BASE;
+    this.fertilizerBoost = null;
     this.recentPickupTimer = 0;
     this.recentPickupColor = PIGMENT_NONE;
 
+    this.reach = new Uint8Array(width * height);
+    this.reachScratch = new Uint8Array(width * height);
+
+    this.initializeDefaultToolbelt();
     this.generatePigmentLayer();
+    this.updateReachField();
   }
 
   tick(dt) {
     this.time += dt;
-
-    this.updatePowerUpTimers(dt);
-
     const bonus = 1 + this.claimedIndices.length * 0.004;
-    const growthMultiplier = this.getGrowthMultiplier();
-    const growthRatio = bonus * growthMultiplier;
+    const growthRatio = bonus;
     this.energy = Math.min(
       ENERGY_CAP,
       this.energy + dt * BASE_CHARGE_RATE * bonus,
@@ -60,45 +60,8 @@ export class ProtoState {
     this.spread(iterations);
     this.healClaimed(dt);
     this.updatePickupTimer(dt);
-  }
-
-  updatePowerUpTimers(dt) {
-    if (this.growthMultiplierTimer > 0) {
-      this.growthMultiplierTimer = Math.max(0, this.growthMultiplierTimer - dt);
-    }
-
-    if (this.powerUpIndex === null) {
-      this.powerUpRespawnTimer -= dt;
-      if (this.powerUpRespawnTimer <= 0) {
-        this.spawnPowerUp();
-      }
-    }
-  }
-
-  getGrowthMultiplier() {
-    return this.growthMultiplierTimer > 0 ? 2 : 1;
-  }
-
-  spawnPowerUp() {
-    const total = this.grid.length;
-    for (let attempt = 0; attempt < 200; attempt += 1) {
-      const idx = Math.floor(Math.random() * total);
-      if (this.grid[idx] === 0) {
-        this.powerUpIndex = idx;
-        this.powerUpRespawnTimer = POWER_UP_RESPAWN;
-        return true;
-      }
-    }
-    this.powerUpRespawnTimer = POWER_UP_RESPAWN;
-    return false;
-  }
-
-  consumePowerUp(idx) {
-    if (this.powerUpIndex === null) return;
-    if (idx !== this.powerUpIndex) return;
-    this.powerUpIndex = null;
-    this.growthMultiplierTimer = POWER_UP_DURATION;
-    this.powerUpRespawnTimer = POWER_UP_RESPAWN;
+    this.updateFertilizerBoost(dt);
+    this.updateReachField();
   }
 
   healClaimed(dt) {
@@ -113,6 +76,15 @@ export class ProtoState {
     }
   }
 
+  updateFertilizerBoost(dt) {
+    if (!this.fertilizerBoost) return;
+    const boost = this.fertilizerBoost;
+    boost.remaining = Math.max(0, boost.remaining - dt);
+    if (boost.remaining <= 0) {
+      this.fertilizerBoost = null;
+    }
+  }
+
   spread(iterations) {
     if (!this.claimedIndices.length) return;
     for (let i = 0; i < iterations; i += 1) {
@@ -120,21 +92,55 @@ export class ProtoState {
       if (sourceIdx < 0) continue;
       const sourceValue = this.grid[sourceIdx];
       if (sourceValue === 0) continue;
+      const sourceColorId = (sourceIdx >= 0 && sourceIdx < this.cellColors.length)
+        ? this.cellColors[sourceIdx]
+        : PIGMENT_BASE;
+      const boost = this.getFertilizerBoostFactor(sourceIdx, sourceColorId);
+      const spreadChanceBase = 0.35;
+      const spreadChance = clamp(spreadChanceBase + boost * 0.6, 0, 1);
+      const reinforceChanceBase = 0.3;
+      const reinforceChance = clamp(reinforceChanceBase + boost * 0.5, 0, 1);
       const neighbors = this.neighborsOfIndex(sourceIdx);
       if (!neighbors.length) continue;
       const targetIdx = neighbors[Math.floor(Math.random() * neighbors.length)];
       const currentValue = this.grid[targetIdx];
       if (currentValue === 0) {
-        if (Math.random() < 0.35) {
+        if (Math.random() < spreadChance) {
           const spreadValue = clamp(sourceValue - 24, 24, 255);
           this.grid[targetIdx] = spreadValue;
           const colorId = this.inheritColorFromSource(sourceIdx);
           this.onCellClaimed(targetIdx, colorId);
         }
-      } else if (Math.random() < 0.1) {
-        this.grid[targetIdx] = clamp(currentValue + 4, 0, 255);
+      } else if (Math.random() < reinforceChance) {
+        const reinforced = clamp(currentValue + 4 + Math.floor(40 * boost), 0, 255);
+        this.grid[targetIdx] = reinforced;
       }
     }
+  }
+
+  getFertilizerBoostFactor(index, colorId) {
+    if (!this.fertilizerBoost) return 0;
+    if (!Number.isFinite(index) || index < 0 || index >= this.grid.length) return 0;
+    const boost = this.fertilizerBoost;
+    const effectiveColorId = colorId === undefined || colorId === null ? PIGMENT_BASE : colorId;
+    const boostColorId = boost.colorId === undefined || boost.colorId === null ? PIGMENT_NONE : boost.colorId;
+    if (boostColorId !== PIGMENT_BASE && effectiveColorId !== boostColorId) {
+      return 0;
+    }
+    const center = boost.center;
+    if (!Number.isFinite(center) || center < 0 || center >= this.grid.length) return 0;
+    const sourceCoord = this.coordFromIndex(index);
+    const centerCoord = this.coordFromIndex(center);
+    const dx = sourceCoord.x - centerCoord.x;
+    const dy = sourceCoord.y - centerCoord.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const radius = Math.max(FERTILIZER_BOOST_RADIUS, 0);
+    if (radius <= 0) return 0;
+    const spatial = 1 - clamp(dist / radius, 0, 1);
+    if (spatial <= 0) return 0;
+    const duration = Math.max(boost.duration || FERTILIZER_BOOST_DURATION, 0.0001);
+    const temporal = clamp(boost.remaining / duration, 0, 1);
+    return spatial * temporal;
   }
 
   neighborsOfIndex(index) {
@@ -183,15 +189,39 @@ export class ProtoState {
     return this.placeControl(this.pointerCell.x, this.pointerCell.y);
   }
 
+  attemptDropFertilizerAtPointer() {
+    if (!this.pointerCell) return false;
+    return this.dropFertilizer(this.pointerCell.x, this.pointerCell.y);
+  }
+
   placeControl(x, y) {
-    if (y < this.height - this.controlBandHeight) return false;
     const idx = this.indexFromCoord(x, y);
     if (this.grid[idx] !== 0) return false;
+    if (!this.isCellInReach(x, y)) return false;
     if (this.energy < CONTROL_COST) return false;
     this.energy -= CONTROL_COST;
     this.grid[idx] = 255;
     const colorId = this.consumeActivePigment();
+    if (colorId !== PIGMENT_BASE && colorId !== PIGMENT_FERTILIZER) {
+      this.lastNonFertilizerColorId = colorId;
+    }
     this.onCellClaimed(idx, colorId);
+    return true;
+  }
+
+  dropFertilizer(x, y) {
+    if (this.fertilizer <= 0) return false;
+    if (x < 0 || y < 0 || x >= this.width || y >= this.height) return false;
+    const idx = this.indexFromCoord(x, y);
+    if (this.grid[idx] === 0) return false;
+    const colorId = this.lastNonFertilizerColorId || PIGMENT_BASE;
+    this.fertilizer = clamp(this.fertilizer - 1, 0, FERTILIZER_MAX);
+    this.fertilizerBoost = {
+      center: idx,
+      colorId,
+      remaining: FERTILIZER_BOOST_DURATION,
+      duration: FERTILIZER_BOOST_DURATION,
+    };
     return true;
   }
 
@@ -220,15 +250,15 @@ export class ProtoState {
       pointerActive: pointerActive && !!this.pointerCell,
       bandHeightNorm: this.controlBandHeight / this.height,
       energyNorm: this.energy / ENERGY_CAP,
-      powerUpCell: this.powerUpIndex === null ? null : this.coordFromIndex(this.powerUpIndex),
-      powerUpActive: this.powerUpIndex !== null,
-      growthBoostActive: this.growthMultiplierTimer > 0,
       hudLeftIcons: hud.left,
       hudRightIcons: hud.right,
       toolbeltLeft: toolbelt.left,
       toolbeltRight: toolbelt.right,
       activeSlotIndex: this.activeSlotIndex,
+      fertilizerCount: this.fertilizer,
       fertilizerNorm: this.fertilizer / FERTILIZER_MAX,
+      fertilizerBoost: this.getFertilizerBoostDescriptor(),
+      reachMask: this.reach,
       recentPickup: {
         colorId: this.recentPickupColor,
         strength: clamp(recentPickupStrength, 0, 1),
@@ -236,15 +266,45 @@ export class ProtoState {
     };
   }
 
+  getFertilizerBoostDescriptor() {
+    if (!this.fertilizerBoost) {
+      return {
+        centerUv: null,
+        colorId: PIGMENT_NONE,
+        strength: 0,
+        radiusNorm: 0,
+      };
+    }
+    const boost = this.fertilizerBoost;
+    const total = this.width * this.height;
+    if (!Number.isFinite(boost.center) || boost.center < 0 || boost.center >= total) {
+      return {
+        centerUv: null,
+        colorId: PIGMENT_NONE,
+        strength: 0,
+        radiusNorm: 0,
+      };
+    }
+    const coord = this.coordFromIndex(boost.center);
+    const u = this.width > 0 ? (coord.x + 0.5) / this.width : 0.5;
+    const v = this.height > 0 ? (coord.y + 0.5) / this.height : 0.5;
+    const duration = Math.max(boost.duration || FERTILIZER_BOOST_DURATION, 0.0001);
+    const strength = clamp(boost.remaining / duration, 0, 1);
+    const radiusNorm = this.width > 0 ? FERTILIZER_BOOST_RADIUS / this.width : 0;
+    return {
+      centerUv: { u, v },
+      colorId: boost.colorId || PIGMENT_NONE,
+      strength,
+      radiusNorm,
+    };
+  }
+
   buildHudDescriptors() {
     const energyFill = this.energy / ENERGY_CAP;
     const spreadFill = this.claimedIndices.length / this.grid.length;
-    const powerIndicator = this.powerUpIndex === null ? 0 : 1;
-    const boostIndicator = this.growthMultiplierTimer > 0 ? 1 : 0;
-
     const fertilizerFill = this.fertilizer / FERTILIZER_MAX;
     const left = this.normalizeHudList([energyFill, fertilizerFill, spreadFill]);
-    const right = this.normalizeHudList([powerIndicator, boostIndicator]);
+    const right = this.normalizeHudList([]);
 
     return { left, right };
   }
@@ -261,18 +321,93 @@ export class ProtoState {
     return { values: result, count };
   }
 
-  generatePigmentLayer() {
-    for (let i = 0; i < this.pigments.length; i += 1) {
-      const noise = this.coordNoise(i);
-      if (noise < 0.08) {
-        this.pigments[i] = PIGMENT_FERTILIZER;
-      } else if (noise < 0.6) {
-        const variantIndex = Math.floor(((noise - 0.08) / 0.52) * PIGMENT_VARIANTS.length);
-        const paletteIdx = clamp(variantIndex, 0, PIGMENT_VARIANTS.length - 1);
-        this.pigments[i] = PIGMENT_VARIANTS[paletteIdx];
-      } else {
-        this.pigments[i] = PIGMENT_NONE;
+  initializeDefaultToolbelt() {
+    if (!Array.isArray(this.toolbelt) || this.toolbelt.length === 0) return;
+    this.toolbelt[0] = { colorId: PIGMENT_BASE, locked: true };
+    if (this.toolbelt.length > 1) {
+      this.toolbelt[1] = { colorId: PIGMENT_FERTILIZER, locked: true };
+    }
+    this.activeSlotIndex = 0;
+  }
+
+  updateReachField() {
+    const size = this.width * this.height;
+    if (!this.reach || this.reach.length !== size) {
+      this.reach = new Uint8Array(size);
+    }
+    if (!this.reachScratch || this.reachScratch.length !== size) {
+      this.reachScratch = new Uint8Array(size);
+    }
+
+    const width = this.width;
+    const height = this.height;
+    const bottomY = height - 1;
+
+    for (let idx = 0; idx < size; idx += 1) {
+      const y = Math.floor(idx / width);
+      const isSource = y === bottomY || this.grid[idx] > 0;
+      const value = isSource ? 255 : 0;
+      this.reach[idx] = value;
+      this.reachScratch[idx] = value;
+    }
+
+    const radius = 4;
+    for (let step = 0; step < radius; step += 1) {
+      for (let idx = 0; idx < size; idx += 1) {
+        if (this.reach[idx]) {
+          continue;
+        }
+        const x = idx % width;
+        const y = Math.floor(idx / width);
+        let neighbor = false;
+        if (x > 0 && this.reachScratch[idx - 1]) neighbor = true;
+        if (!neighbor && x < width - 1 && this.reachScratch[idx + 1]) neighbor = true;
+        if (!neighbor && y > 0 && this.reachScratch[idx - width]) neighbor = true;
+        if (!neighbor && y < height - 1 && this.reachScratch[idx + width]) neighbor = true;
+        if (neighbor) {
+          this.reach[idx] = 255;
+        }
       }
+      this.reachScratch.set(this.reach);
+    }
+  }
+
+  isCellInReach(x, y) {
+    if (!this.reach || this.reach.length === 0) return true;
+    if (x < 0 || y < 0 || x >= this.width || y >= this.height) return false;
+    const idx = this.indexFromCoord(x, y);
+    return this.reach[idx] > 0;
+  }
+
+  generatePigmentLayer() {
+    const total = this.pigments.length;
+    const indices = new Array(total);
+    const noiseValues = new Float32Array(total);
+
+    this.pigments.fill(PIGMENT_NONE);
+    this.cellColors.fill(PIGMENT_NONE);
+
+    for (let i = 0; i < total; i += 1) {
+      indices[i] = i;
+      noiseValues[i] = this.coordNoise(i);
+    }
+
+    indices.sort((a, b) => noiseValues[a] - noiseValues[b]);
+
+    const REQUIRED_FERTILIZER = 20;
+    let cursor = 0;
+
+    for (let placed = 0; placed < REQUIRED_FERTILIZER && cursor < indices.length; placed += 1, cursor += 1) {
+      const idx = indices[cursor];
+      this.pigments[idx] = PIGMENT_FERTILIZER;
+      this.cellColors[idx] = PIGMENT_FERTILIZER;
+    }
+
+    for (let v = 0; v < PIGMENT_VARIANTS.length && cursor < indices.length; v += 1, cursor += 1) {
+      const idx = indices[cursor];
+      const variant = PIGMENT_VARIANTS[v];
+      this.pigments[idx] = variant;
+      this.cellColors[idx] = variant;
     }
   }
 
@@ -285,15 +420,15 @@ export class ProtoState {
 
   onCellClaimed(idx, colorId = PIGMENT_BASE) {
     this.claimedIndices.push(idx);
-    this.consumePowerUp(idx);
     this.harvestPigment(idx);
-    this.cellColors[idx] = colorId;
+    const appliedColor = colorId === undefined ? PIGMENT_BASE : colorId;
+    this.cellColors[idx] = appliedColor;
   }
 
   harvestPigment(idx) {
     const pigmentId = this.pigments[idx];
     if (pigmentId === PIGMENT_NONE) {
-      return;
+      return PIGMENT_NONE;
     }
     if (pigmentId === PIGMENT_FERTILIZER) {
       this.fertilizer = clamp(this.fertilizer + 1, 0, FERTILIZER_MAX);
@@ -303,36 +438,43 @@ export class ProtoState {
     this.recentPickupColor = pigmentId;
     this.recentPickupTimer = RECENT_PICKUP_WINDOW;
     this.pigments[idx] = PIGMENT_NONE;
+    return pigmentId;
   }
 
   collectPigment(pigmentId) {
     for (let i = 0; i < this.toolbelt.length; i += 1) {
       const slot = this.toolbelt[i];
       if (slot && slot.colorId === pigmentId) {
-        slot.count = clamp(slot.count + 1, 0, TOOLBELT_STACK_CAP);
         return;
       }
     }
     for (let i = 0; i < this.toolbelt.length; i += 1) {
-      if (!this.toolbelt[i]) {
-        this.toolbelt[i] = { colorId: pigmentId, count: 1 };
+      const slot = this.toolbelt[i];
+      if (!slot) {
+        this.toolbelt[i] = { colorId: pigmentId };
         return;
       }
     }
-    this.toolbelt[this.activeSlotIndex] = { colorId: pigmentId, count: 1 };
+    const startIndex = this.activeSlotIndex;
+    for (let offset = 0; offset < this.toolbelt.length; offset += 1) {
+      const index = (startIndex + offset) % this.toolbelt.length;
+      const slot = this.toolbelt[index];
+      if (!slot || !slot.locked) {
+        this.toolbelt[index] = { colorId: pigmentId };
+        return;
+      }
+    }
   }
 
   consumeActivePigment() {
     const slot = this.toolbelt[this.activeSlotIndex];
-    if (!slot || slot.count <= 0) {
+    if (!slot) {
       return PIGMENT_BASE;
     }
-    slot.count -= 1;
-    const colorId = slot.colorId;
-    if (slot.count <= 0) {
-      this.toolbelt[this.activeSlotIndex] = null;
+    if (slot.locked && slot.colorId === PIGMENT_FERTILIZER) {
+      return PIGMENT_BASE;
     }
-    return colorId;
+    return slot.colorId;
   }
 
   setActiveSlot(index) {
@@ -377,9 +519,9 @@ export class ProtoState {
     for (let i = 0; i < length; i += 1) {
       const slot = this.toolbelt[start + i];
       if (slot) {
-        fill[i] = clamp(slot.count / TOOLBELT_STACK_CAP, 0, 1);
+        fill[i] = 1;
         colors[i] = slot.colorId;
-        stacks[i] = slot.count;
+        stacks[i] = 0;
       }
     }
     const activeIndex = this.activeSlotIndex - start;

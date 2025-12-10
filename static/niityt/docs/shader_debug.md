@@ -36,7 +36,7 @@ Scale/clamp intermediate values into [0,1] before writing them out; otherwise yo
 
 ## 3. Binary Search the Shader
 1. Comment out large sections (e.g., toolbelt rail rendering). If the playfield returns, the bug lies in the removed block.
-2. Reintroduce code block-by-block (band render, pointer, power-up, toolbelt). This “shader bisection” narrows the culprit quickly.
+2. Reintroduce code block-by-block (band render, pointer, toolbelt). This “shader bisection” narrows the culprit quickly.
 3. When a block causes failure, instrument it with the table in §2.
 
 ## 4. Cross-Layer Checks (Rust/WASM ⇄ JS)
