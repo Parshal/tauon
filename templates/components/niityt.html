@@ -1,0 +1,16 @@
+<div class="niityt-wrapper">
+  <canvas
+    class="niityt-canvas"
+    width="1024"
+    height="640"
+    role="img"
+    aria-label="Niityt control grid"
+  ></canvas>
+  <div class="niityt-hint">
+    <p>
+      Niityt prototype — the entire HUD renders inside the canvas. Resize the
+      container or go fullscreen for an immersive view.
+    </p>
+  </div>
+</div>
+<script type="module" src="{{ url_for('static', filename='niityt/main.js') }}"></script>

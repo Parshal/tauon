@@ -174,6 +174,26 @@ def render_file_page(rel: Path, html_body: str) -> str:
     )
 
 
+def render_niityt_page() -> str:
+    component_html = render_template("components/niityt.html")
+    main_html = f"""
+<div class="niityt-section">
+  <h2>Niityt Meadow</h2>
+  <p class="niityt-copy">Grow a vivid grass meadow and plant wildflowers inside a single WebGL2 canvas. Seed new blooms in the control band, feed them fertilizer, and watch the colors spread.</p>
+  {component_html}
+</div>
+"""
+    return render_page(
+        title="Niityt",
+        main_html=main_html,
+        main_title="Niityt",
+        main_path="/niityt",
+        path_input="",
+        selected_rel=None,
+        body_class="niityt-page"
+    )
+
+
 # ---- ROUTES ----
 
 @app.route("/", methods=["GET"])
@@ -206,5 +226,11 @@ def index_or_view():
     return render_file_page(rel_from_base, html_body)
 
 
+@app.route("/niityt", methods=["GET"])
+def niityt_demo():
+    return render_niityt_page()
+
+
 if __name__ == "__main__":
+    print("Clickety (control) click --> http://127.0.0.1:8000/niityt <-- to jump in to game.")
     app.run(host="127.0.0.1", port=8000, debug=True)

@@ -1,0 +1,15 @@
+{
+  "name": "niityt-core",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "niityt_core_bg.wasm",
+    "niityt_core.js",
+    "niityt_core.d.ts"
+  ],
+  "main": "niityt_core.js",
+  "types": "niityt_core.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

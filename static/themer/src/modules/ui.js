@@ -1,4 +1,5 @@
 import { PARAMS, PASS_FLAG_KEYS } from '../data/config.js';
+import { createVSlider, bindVSlider } from '../../widgets/v_slider/index.js';
 
 const STORAGE_KEY = 'themerConfig';
 const STORAGE_KEY_HEIGHT = 'themerDockHeight';
@@ -134,16 +135,14 @@ export class ControlPanel {
 
   renderControl(p) {
     const current = this.store.get(p.key);
-    return `
-      <div class="cd-control" data-key="${p.key}">
-        <div class="cd-control-label">${p.label}</div>
-        <input type="number" class="cd-control-input inp-max" value="${p.max}" step="${p.step}">
-        <input type="range" class="cd-control-slider" 
-           min="${p.min}" max="${p.max}" step="${p.step}" value="${current}" orient="vertical">
-        <input type="number" class="cd-control-input inp-min" value="${p.min}" step="${p.step}">
-        <input type="number" class="cd-control-input main-val" value="${current}" step="${p.step}">
-      </div>
-    `;
+    return createVSlider({
+      key: p.key,
+      label: p.label,
+      min: p.min,
+      max: p.max,
+      step: p.step,
+      value: current,
+    });
   }
 
   bindEvents() {
@@ -212,52 +211,7 @@ export class ControlPanel {
     saveBtn.onclick = () => this.saveConfig();
 
     // Inputs
-    this.dock.querySelectorAll('.cd-control').forEach(el => {
-      const key = el.dataset.key;
-      const slider = el.querySelector('.cd-control-slider');
-      const valInput = el.querySelector('.main-val');
-      const minInput = el.querySelector('.inp-min');
-      const maxInput = el.querySelector('.inp-max');
-
-      // Slider Change
-      slider.addEventListener('input', (e) => {
-        const v = Number(e.target.value);
-        valInput.value = v;
-        this.store.set(key, v);
-      });
-
-      // Number Input Change
-      valInput.addEventListener('change', (e) => {
-        let v = Number(e.target.value);
-        // visual clamp
-        const min = Number(minInput.value);
-        const max = Number(maxInput.value);
-        v = Math.max(min, Math.min(max, v));
-        
-        valInput.value = v;
-        slider.value = v;
-        this.store.set(key, v);
-      });
-
-      // Min/Max Logic
-      minInput.addEventListener('change', (e) => {
-        slider.min = e.target.value;
-        if (Number(slider.value) < Number(e.target.value)) {
-          this.store.set(key, Number(e.target.value));
-          slider.value = e.target.value;
-          valInput.value = e.target.value;
-        }
-      });
-
-      maxInput.addEventListener('change', (e) => {
-        slider.max = e.target.value;
-        if (Number(slider.value) > Number(e.target.value)) {
-          this.store.set(key, Number(e.target.value));
-          slider.value = e.target.value;
-          valInput.value = e.target.value;
-        }
-      });
-    });
+    this.dock.querySelectorAll('.cd-control').forEach(el => bindVSlider(el, this.store));
 
     // Group Toggles
     this.dock.querySelectorAll('.cd-toggle').forEach(btn => {
@@ -356,13 +310,18 @@ export class ControlPanel {
     this.fpsEl.textContent = Math.round(value).toString();
   }
 
-  setGpuTime(value) {
+  setGpuTime(value, timingMode = null) {
     if (!this.gpuEl) return;
-    if (typeof value !== 'number' || !isFinite(value)) {
-      this.gpuEl.textContent = '--';
-      return;
-    }
-    this.gpuEl.textContent = value.toFixed(2);
+    const isNumber = typeof value === 'number' && isFinite(value);
+    const modeLabel = timingMode === 'gpu-ext'
+      ? 'GPU'
+      : timingMode === 'cpu-fallback'
+        ? 'CPU'
+        : null;
+    const suffix = modeLabel ? ` ${modeLabel}` : '';
+    this.gpuEl.textContent = isNumber
+      ? `${value.toFixed(2)}${suffix}`
+      : `--${suffix}`;
   }
 
   flashStatus(text, isError = false) {

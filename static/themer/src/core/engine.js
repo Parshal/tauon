@@ -94,13 +94,14 @@ export class ThemerEngine {
     this.renderer.render(t);
     if (this.ui?.setGpuTime && this.renderer?.getStarPassMs) {
       const gpuTime = this.renderer.getStarPassMs();
+      const timingMode = this.renderer.getTimingMode?.();
       if (this.renderer.isTimingDebugEnabled?.() === true) {
         console.log('[Themer][Timing] HUD pipeline sample', {
-          timingMode: this.renderer.getTimingMode?.(),
+          timingMode,
           gpuTime,
         });
       }
-      this.ui.setGpuTime(gpuTime);
+      this.ui.setGpuTime(gpuTime, timingMode);
     }
     if (this.styler) {
       this.styler.tick(delta);
