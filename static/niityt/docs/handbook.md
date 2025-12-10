@@ -75,7 +75,7 @@ Niityt is a self-contained prototype where the entire HUD, grid, and feedback lo
 - Lightweight wrapper + copy ready to embed on `/niityt`. @templates/components/niityt.html#1-17 @app.py#177-232
 
 ### Quick Tour
-- `main.js` finds every `.niityt-canvas`, instantiates `ProtoState`, `NiitytRenderer`, and `InputController`, then ticks RAF forever. @static/niityt/main.js#1-50
+- `main.js` finds every `.niityt-canvas`, instantiates `ProtoState`, `NiitytRenderer`, and `InputController` (honoring any `data-niityt-mode` attribute for sandbox vs duel), then ticks RAF forever. @static/niityt/main.js#1-50
 - `state.js` handles energy costs, spread rates, pigment harvesting, fertilizer gains, eight-slot toolbelt stacks, and HUD descriptors. @static/niityt/state.js#1-395
 - `layout.js` computes the centered square + gutters and gives helpers for clamped pointer UV mapping. @static/niityt/layout.js#1-52
 - `renderer.js` loads GLSL shaders, uploads the grid texture, sends square min/max + HUD arrays, and draws fullscreen triangles. @static/niityt/renderer.js#72-320
@@ -87,6 +87,7 @@ Niityt is a self-contained prototype where the entire HUD, grid, and feedback lo
 1. Render the component snippet: `{% include 'components/niityt.html' %}` (see Flask wiring for `/niityt`). @app.py#177-232
 2. Serve `/static/niityt/main.js`, `/static/niityt/shaders/*`, `/static/niityt/layout.js`, and `/static/css/niityt.css`.
 3. Style overrides are optional; the default wrapper stretches full width with a 16:10 canvas. @static/css/niityt.css#1-28
+4. Optional modes: pass `?mode=duel` to `/niityt` or set `data-niityt-mode="duel"` on the canvas to opt a Niityt instance into duel mode; sandbox remains the default.
 
 ### Extend or Hack
 - Tune grid size or control band heuristics inside `ProtoState` (mirror to WASM if perf becomes critical). @static/niityt/state.js#1-206 @wasm/niityt-core/src/lib.rs#1-235
@@ -123,7 +124,7 @@ _Supersedes the HUD-centric snapshot (2025-12-10c) by capturing fertilizer boost
 1. **Discovery.** `bootstrapAll()` queries `.niityt-canvas`, skips already-mounted nodes, and awaits `mountNiityt()` promises. @static/niityt/main.js#33-48
 2. **Initialization.** `mountNiityt()` creates `ProtoState`, `NiitytRenderer`, and `InputController`, awaits shader program compilation, and seeds `lastTime` for delta clamping (≤0.2 s). @static/niityt/main.js#7-30
 3. **Frame loop.** Each RAF tick computes `delta`, advances `state.tick(delta)` (regen, spread, healing), and hands `renderer.render()` the payload plus `input.pointerActive`. @static/niityt/main.js#18-29 @static/niityt/state.js#28-118
-4. **State → renderer contract.** `getRenderPayload()` ships the grid + pigment textures, band height, energy norm, pointer cell, HUD arrays, toolbelt slices, fertilizer meter (both normalized and raw count), and recent pickup metadata for shader glows. @static/niityt/state.js#209-236
+4. **State → renderer contract.** `getRenderPayload()` ships the grid + pigment textures, band height, energy norm, pointer cell, HUD arrays, toolbelt slices, fertilizer meter (both normalized and raw count), recent pickup metadata for shader glows, and now an ownership mask plus a duel match descriptor (mode/finished/winner) for future AI modes. @static/niityt/state.js#209-292
 5. **Renderer duties.** `NiitytRenderer` uploads textures, caches uniform locations (including square min/max + HUD arrays), updates layouts on resize, and draws fullscreen triangles. @static/niityt/renderer.js#93-320
 6. **Shader branching.** `grid.frag.glsl` differentiates square playfield vs. gutters: square draws infection pixels, band pulses, and pointer glow; gutters draw slot rails driven by HUD arrays. @static/niityt/shaders/grid.frag.glsl#27-175
 

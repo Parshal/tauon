@@ -8,7 +8,8 @@ async function mountNiityt(canvas) {
   if (!canvas || canvas.dataset[NIITYT_ATTR]) return null;
   canvas.dataset[NIITYT_ATTR] = 'true';
 
-  const state = new ProtoState(128, 128);
+  const mode = canvas?.dataset?.niitytMode === 'duel' ? 'duel' : 'sandbox';
+  const state = new ProtoState(128, 128, { mode });
   const renderer = new NiitytRenderer(canvas);
   await renderer.init();
 

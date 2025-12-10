@@ -174,8 +174,8 @@ def render_file_page(rel: Path, html_body: str) -> str:
     )
 
 
-def render_niityt_page() -> str:
-    component_html = render_template("components/niityt.html")
+def render_niityt_page(mode: str = "sandbox") -> str:
+    component_html = render_template("components/niityt.html", niityt_mode=mode)
     main_html = f"""
 <div class="niityt-section">
   <h2>Niityt Meadow</h2>
@@ -228,11 +228,14 @@ def index_or_view():
 
 @app.route("/niityt", methods=["GET"])
 def niityt_demo():
-    return render_niityt_page()
+    mode = request.args.get("mode", "sandbox").strip().lower() or "sandbox"
+    if mode not in {"sandbox", "duel"}:
+        mode = "sandbox"
+    return render_niityt_page(mode=mode)
 
 
 if __name__ == "__main__":
-    print("#/¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯\\#")
-    print("#| Clickety (control) click --> http://127.0.0.1:8000/niityt <-- to jump in to game. |#")
-    print("#\\___________________________________________________________________________________/#")
+    print("  /¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯\\")
+    print(" |  -->   http://127.0.0.1:8000/niityt?mode=duel   <--  |")
+    print("  \\____________________________________________________/")
     app.run(host="127.0.0.1", port=8000, debug=True)

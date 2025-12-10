@@ -15,19 +15,28 @@ const PIGMENT_BASE = 0;
 const PIGMENT_VARIANTS = [2, 3, 4, 5, 6, 7];
 const RECENT_PICKUP_WINDOW = 1.5;
 
+const AI_DECISION_INTERVAL = 1.0;
+
+const OWNER_NEUTRAL = 0;
+const OWNER_PLAYER = 1;
+const OWNER_AI = 2;
+
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
 export class ProtoState {
-  constructor(width = 128, height = 128) {
+  constructor(width = 128, height = 128, options = {}) {
     this.width = width;
     this.height = height;
-    this.grid = new Uint8Array(width * height);
-    this.cellColors = new Uint8Array(width * height);
-    this.pigments = new Uint8Array(width * height);
+    const size = width * height;
+    this.grid = new Uint8Array(size);
+    this.cellColors = new Uint8Array(size);
+    this.pigments = new Uint8Array(size);
+    this.owner = new Uint8Array(size);
     this.controlBandHeight = Math.max(6, Math.floor(height * 0.08));
     this.energy = CONTROL_COST * 1.5;
+    this.aiEnergy = CONTROL_COST * 1.5;
     this.pointerCell = null;
     this.claimedIndices = [];
     this.time = 0;
@@ -39,11 +48,20 @@ export class ProtoState {
     this.recentPickupTimer = 0;
     this.recentPickupColor = PIGMENT_NONE;
 
-    this.reach = new Uint8Array(width * height);
-    this.reachScratch = new Uint8Array(width * height);
+    this.aiDecisionTimer = 0;
+
+    this.reach = new Uint8Array(size);
+    this.reachScratch = new Uint8Array(size);
+
+    this.mode = (options && options.mode === 'duel') ? 'duel' : 'sandbox';
+    this.matchFinished = false;
+    this.matchWinner = null;
 
     this.initializeDefaultToolbelt();
     this.generatePigmentLayer();
+    if (this.mode === 'duel') {
+      this.initializeAiStartingLine();
+    }
     this.updateReachField();
   }
 
@@ -61,7 +79,15 @@ export class ProtoState {
     this.healClaimed(dt);
     this.updatePickupTimer(dt);
     this.updateFertilizerBoost(dt);
+    if (this.mode === 'duel') {
+      this.aiEnergy = Math.min(
+        ENERGY_CAP,
+        this.aiEnergy + dt * BASE_CHARGE_RATE * bonus,
+      );
+      this.updateAi(dt);
+    }
     this.updateReachField();
+    this.updateMatchState();
   }
 
   healClaimed(dt) {
@@ -109,7 +135,14 @@ export class ProtoState {
           const spreadValue = clamp(sourceValue - 24, 24, 255);
           this.grid[targetIdx] = spreadValue;
           const colorId = this.inheritColorFromSource(sourceIdx);
-          this.onCellClaimed(targetIdx, colorId);
+          let ownerId = OWNER_PLAYER;
+          if (this.owner && this.owner.length === this.grid.length) {
+            const srcOwner = this.owner[sourceIdx];
+            if (srcOwner === OWNER_AI) {
+              ownerId = OWNER_AI;
+            }
+          }
+          this.onCellClaimed(targetIdx, colorId, ownerId);
         }
       } else if (Math.random() < reinforceChance) {
         const reinforced = clamp(currentValue + 4 + Math.floor(40 * boost), 0, 255);
@@ -195,6 +228,7 @@ export class ProtoState {
   }
 
   placeControl(x, y) {
+    if (this.mode === 'duel' && this.matchFinished) return false;
     const idx = this.indexFromCoord(x, y);
     if (this.grid[idx] !== 0) return false;
     if (!this.isCellInReach(x, y)) return false;
@@ -205,11 +239,12 @@ export class ProtoState {
     if (colorId !== PIGMENT_BASE && colorId !== PIGMENT_FERTILIZER) {
       this.lastNonFertilizerColorId = colorId;
     }
-    this.onCellClaimed(idx, colorId);
+    this.onCellClaimed(idx, colorId, OWNER_PLAYER);
     return true;
   }
 
   dropFertilizer(x, y) {
+    if (this.mode === 'duel' && this.matchFinished) return false;
     if (this.fertilizer <= 0) return false;
     if (x < 0 || y < 0 || x >= this.width || y >= this.height) return false;
     const idx = this.indexFromCoord(x, y);
@@ -240,6 +275,7 @@ export class ProtoState {
     const hud = this.buildHudDescriptors();
     const toolbelt = this.getToolbeltDescriptors();
     const recentPickupStrength = RECENT_PICKUP_WINDOW > 0 ? this.recentPickupTimer / RECENT_PICKUP_WINDOW : 0;
+    const ownership = this.getOwnershipStats();
     return {
       grid: this.grid,
       cellColors: this.cellColors,
@@ -259,6 +295,13 @@ export class ProtoState {
       fertilizerNorm: this.fertilizer / FERTILIZER_MAX,
       fertilizerBoost: this.getFertilizerBoostDescriptor(),
       reachMask: this.reach,
+      ownerMask: this.owner,
+      ownership,
+      match: {
+        mode: this.mode,
+        finished: this.matchFinished,
+        winner: this.matchWinner,
+      },
       recentPickup: {
         colorId: this.recentPickupColor,
         strength: clamp(recentPickupStrength, 0, 1),
@@ -411,6 +454,17 @@ export class ProtoState {
     }
   }
 
+  initializeAiStartingLine() {
+    if (this.mode !== 'duel') return;
+    const y = 0;
+    for (let x = 0; x < this.width; x += 1) {
+      const idx = this.indexFromCoord(x, y);
+      if (idx < 0 || idx >= this.grid.length) continue;
+      this.grid[idx] = 220;
+      this.onCellClaimed(idx, PIGMENT_BASE, OWNER_AI);
+    }
+  }
+
   coordNoise(index) {
     const { x, y } = this.coordFromIndex(index);
     const dot = x * 374761393 + y * 668265263;
@@ -418,11 +472,25 @@ export class ProtoState {
     return s - Math.floor(s);
   }
 
-  onCellClaimed(idx, colorId = PIGMENT_BASE) {
+  onCellClaimed(idx, colorId = PIGMENT_BASE, ownerId = OWNER_PLAYER) {
     this.claimedIndices.push(idx);
-    this.harvestPigment(idx);
+    if (ownerId === OWNER_PLAYER) {
+      this.harvestPigment(idx);
+    } else {
+      this.clearPigment(idx);
+    }
     const appliedColor = colorId === undefined ? PIGMENT_BASE : colorId;
     this.cellColors[idx] = appliedColor;
+    if (this.owner && this.owner.length === this.grid.length) {
+      const value = ownerId || OWNER_PLAYER;
+      this.owner[idx] = value;
+    }
+  }
+
+  clearPigment(idx) {
+    if (!Number.isFinite(idx)) return;
+    if (idx < 0 || idx >= this.pigments.length) return;
+    this.pigments[idx] = PIGMENT_NONE;
   }
 
   harvestPigment(idx) {
@@ -501,6 +569,141 @@ export class ProtoState {
     if (this.recentPickupTimer === 0) {
       this.recentPickupColor = PIGMENT_NONE;
     }
+  }
+
+  updateAi(dt) {
+    if (this.mode !== 'duel' || this.matchFinished) {
+      return;
+    }
+    if (!Number.isFinite(dt) || dt <= 0) return;
+
+    this.aiDecisionTimer += dt;
+    if (this.aiDecisionTimer < AI_DECISION_INTERVAL) {
+      return;
+    }
+    this.aiDecisionTimer -= AI_DECISION_INTERVAL;
+    this.runAiTurn();
+  }
+
+  runAiTurn() {
+    if (this.aiEnergy < CONTROL_COST) return;
+    const total = this.width * this.height;
+    if (total <= 0) return;
+
+    const maxAttempts = 64;
+    let bestIdx = -1;
+    let bestScore = -Infinity;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const idx = Math.floor(Math.random() * total);
+      if (this.grid[idx] !== 0) continue;
+      const coord = this.coordFromIndex(idx);
+      const x = coord.x;
+      const y = coord.y;
+
+      let score = 0;
+      const half = this.height * 0.5;
+      const third = this.height / 3;
+      if (y < third) {
+        score += 2;
+      } else if (y < half) {
+        score += 1;
+      }
+
+      const neighbors = this.neighborsOfIndex(idx);
+      for (let i = 0; i < neighbors.length; i += 1) {
+        const nIdx = neighbors[i];
+        const ownerId = this.owner && this.owner.length === total
+          ? this.owner[nIdx]
+          : OWNER_NEUTRAL;
+        if (ownerId === OWNER_PLAYER) {
+          score += 1;
+        } else if (ownerId === OWNER_AI) {
+          score += 0.5;
+        }
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestIdx = idx;
+      }
+    }
+
+    if (bestIdx >= 0) {
+      const { x, y } = this.coordFromIndex(bestIdx);
+      this.aiPlaceControlAt(x, y);
+    }
+  }
+
+  aiPlaceControlAt(x, y) {
+    if (this.mode !== 'duel' || this.matchFinished) return false;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+    if (x < 0 || y < 0 || x >= this.width || y >= this.height) return false;
+    const idx = this.indexFromCoord(x, y);
+    if (this.grid[idx] !== 0) return false;
+    if (!this.isCellInReach(x, y)) return false;
+    if (this.aiEnergy < CONTROL_COST) return false;
+
+    this.aiEnergy -= CONTROL_COST;
+    this.grid[idx] = 255;
+    const colorId = PIGMENT_BASE;
+    this.onCellClaimed(idx, colorId, OWNER_AI);
+    return true;
+  }
+
+  getOwnershipStats() {
+    const total = this.width * this.height;
+    if (!this.owner || this.owner.length !== total) {
+      const playerCells = this.claimedIndices.length;
+      const neutralCells = total - playerCells;
+      return {
+        playerCells,
+        aiCells: 0,
+        neutralCells,
+        total,
+      };
+    }
+
+    let playerCells = 0;
+    let aiCells = 0;
+    let neutralCells = 0;
+    for (let i = 0; i < total; i += 1) {
+      const ownerId = this.owner[i];
+      if (ownerId === OWNER_PLAYER) {
+        playerCells += 1;
+      } else if (ownerId === OWNER_AI) {
+        aiCells += 1;
+      } else {
+        neutralCells += 1;
+      }
+    }
+
+    return {
+      playerCells,
+      aiCells,
+      neutralCells,
+      total,
+    };
+  }
+
+  updateMatchState() {
+    if (this.mode !== 'duel' || this.matchFinished) {
+      return;
+    }
+
+    const stats = this.getOwnershipStats();
+    if (stats.neutralCells > 0) {
+      return;
+    }
+
+    if (stats.playerCells > stats.aiCells) {
+      this.matchWinner = 'player';
+    } else if (stats.aiCells > stats.playerCells) {
+      this.matchWinner = 'ai';
+    } else {
+      this.matchWinner = 'draw';
+    }
+    this.matchFinished = true;
   }
 
   getToolbeltDescriptors() {

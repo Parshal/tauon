@@ -71,6 +71,7 @@ export class NiitytRenderer {
     this.gridTexture = null;
     this.cellColorTexture = null;
     this.reachTexture = null;
+    this.ownerTexture = null;
     this.gridWidth = 0;
     this.gridHeight = 0;
     this.cellColorWidth = 0;
@@ -123,6 +124,7 @@ export class NiitytRenderer {
       'u_time',
       'u_enableTexture',
       'u_cellColors',
+      'u_owner',
       'u_reach',
       'u_bandHeight',
       'u_energyNorm',
@@ -192,6 +194,15 @@ export class NiitytRenderer {
 
     this.reachTexture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.reachTexture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+
+    this.ownerTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.ownerTexture);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -319,6 +330,24 @@ export class NiitytRenderer {
     gl.bindTexture(gl.TEXTURE_2D, null);
   }
 
+  uploadOwner(ownerMask, width, height) {
+    const gl = this.gl;
+    if (!gl || !ownerMask) return;
+    gl.bindTexture(gl.TEXTURE_2D, this.ownerTexture);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.R8,
+      width,
+      height,
+      0,
+      gl.RED,
+      gl.UNSIGNED_BYTE,
+      ownerMask
+    );
+    gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+
   render(payload) {
     const gl = this.gl;
     if (!gl) return;
@@ -341,6 +370,7 @@ export class NiitytRenderer {
       fertilizerCount,
       recentPickup,
       reachMask,
+      ownerMask,
       fertilizerBoost
     } = payload;
 
@@ -354,6 +384,9 @@ export class NiitytRenderer {
     }
     if (reachMask) {
       this.uploadReach(reachMask, width, height);
+    }
+    if (ownerMask) {
+      this.uploadOwner(ownerMask, width, height);
     }
 
     gl.disable(gl.DEPTH_TEST);
@@ -377,6 +410,13 @@ export class NiitytRenderer {
     gl.bindTexture(gl.TEXTURE_2D, this.reachTexture);
     if (this.uniforms.u_reach) {
       gl.uniform1i(this.uniforms.u_reach, 2);
+    }
+    gl.activeTexture(gl.TEXTURE0);
+
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, this.ownerTexture);
+    if (this.uniforms.u_owner) {
+      gl.uniform1i(this.uniforms.u_owner, 3);
     }
     gl.activeTexture(gl.TEXTURE0);
 

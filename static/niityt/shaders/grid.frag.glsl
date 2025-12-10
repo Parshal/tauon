@@ -8,6 +8,7 @@ out vec4 outColor;
 
 uniform sampler2D u_grid;
 uniform sampler2D u_cellColors;
+uniform sampler2D u_owner;
 uniform sampler2D u_reach;
 uniform vec2 u_gridSize;
 uniform float u_time;
@@ -42,6 +43,9 @@ uniform float u_fertilizerBoostColorId;
 const float EPSILON = 1e-5;
 const float PIGMENT_SCALE = 255.0;
 const float MAX_STACKS = 12.0;
+const int OWNER_NEUTRAL = 0;
+const int OWNER_PLAYER = 1;
+const int OWNER_AI = 2;
 
 float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -81,6 +85,14 @@ vec3 pigmentColor(float pigmentId, float growthValue) {
   }
   int paletteIndex = int(floor(pigmentId + 0.5));
   return pigmentPalette(paletteIndex);
+}
+
+vec3 applyOwnerTint(vec3 base, int ownerId) {
+  if (ownerId == OWNER_AI) {
+    vec3 grey = vec3(0.28, 0.30, 0.34);
+    return mix(base, grey, 0.35);
+  }
+  return base;
 }
 
 vec2 squareSize() {
@@ -276,7 +288,10 @@ void main() {
     float reachMask = step(0.5, reachVal);
     float texel = texture(u_grid, texUV).r;
     float pigmentId = texture(u_cellColors, texUV).r * PIGMENT_SCALE;
+    float ownerSample = texture(u_owner, texUV).r * 255.0;
+    int ownerId = int(floor(ownerSample + 0.5));
     vec3 growthColor = pigmentColor(pigmentId, texel * PIGMENT_SCALE);
+    growthColor = applyOwnerTint(growthColor, ownerId);
     color = mix(color, growthColor, texel);
 
     float pigmentPresent = step(0.5, pigmentId);

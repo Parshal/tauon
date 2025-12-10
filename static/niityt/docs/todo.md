@@ -1,57 +1,56 @@
 # Goal  
-Implement Niityt gameplay/UX updates: visible eight-color map with fertilizer tiles, eight-slot toolbelt, toned-down pointer glow, improved reach visualization, fertilizer counter with timed boosts, and refreshed docs.
+Implement a Niityt AI opponent mode: a rival faction that shares the infection grid, uses the same core mechanics, and plays via a simple heuristic loop with tunable difficulty, plus aligned docs.
 
 # Context
 Read static/niityt/docs/context-cheatsheet.md for background.
 Read static/niityt/docs/handbook.md if you feel lost and need bigger picture.
 
 # Summary  
-- [x] Review existing Niityt logic/docs.  
-- [ ] Implement feature set (colors, toolbelt, glow, fertilizer mechanics, docs).  
-- [ ] Verify via lint/tests/manual run + summarize.
+- [ ] Design AI opponent flavor and rules (duel/survival, win/lose, scoring).  
+- [ ] Extend state with ownership + AI resources and expose them to the renderer/shader.  
+- [ ] Implement baseline AI decision loop with difficulty knobs.  
+- [ ] Add mode selection + minimal UX for AI matches (start/end, basic cues).  
+- [ ] Update handbook/snapshot and run a verification pass.
 
 # TODO (keep tasks bite-sized)
 
 ## 1. Context + planning
-- [ ] Re-read [state.js](cci:7://file:///home/void/repo/tauon/static/niityt/state.js:0:0-0:0), [renderer.js](cci:7://file:///home/void/repo/tauon/static/niityt/renderer.js:0:0-0:0), [grid.frag.glsl](cci:7://file:///home/void/repo/tauon/static/niityt/shaders/grid.frag.glsl:0:0-0:0), input.js, related CSS/template files, and [docs/handbook.md](cci:7://file:///home/void/repo/tauon/static/niityt/docs/handbook.md:0:0-0:0) to lock down current expectations.
+- [ ] Re-skim core Niityt modules (`state.js`, `renderer.js`, `grid.frag.glsl`, `input.js`, `layout.js`) with an AI-opponent lens plus the latest handbook snapshot.
+- [ ] Decide the initial AI opponent flavor (duel vs survival), game-end conditions, and scoring, then capture the decision in the handbook.
 
-## 2. Pigments + pickup flow
-- [x] Visible pigment seeding
-  - [x] Update `ProtoState.generatePigmentLayer()` to spawn 20 fertilizer (white) cells plus one of each flower color.  
-  - [x] Ensure `cellColors/pigments` keep flowers visible at start.
-- [x] Grass→flower pickup flow
-  - [x] Adjust `spread()`/`onCellClaimed()` so grass claiming a flower transfers pigment into the toolbelt.  
-  - [x] Confirm new grass inherits the pigment color for replanting.
+## 2. State: ownership & resources
+- [ ] Add an ownership representation (e.g., per-cell owner buffer/texture) to `ProtoState` so the grid can distinguish neutral/player/AI cells.
+- [ ] Integrate ownership into spread/healing rules, including conflict resolution when different sides push into the same region.
+- [ ] Add AI-side resource pools (energy, fertilizer, and any minimal inventory) plus a shared `placeControlForSide()` entrypoint for human + AI placements.
+- [ ] Extend `getRenderPayload()` to include ownership and basic AI telemetry needed by the renderer/shader.
 
-## 3. Toolbelt UX
-- [x] Restore eight-slot support
-  - [x] Confirm constants/UI allow eight slots per side.  
-  - [x] Update renderer/shader arrays + rail loops so all slots render.  
-  - [x] Ensure keyboard/mouse cycling addresses eight positions.
-- [x] Fertilizer UI polish
-  - [x] Render fertilizer tiles as plain white (no glow).  
-  - [x] Add numeric fertilizer counter overlay to the fertilizer toolbelt slot (shader/HUD).
+## 3. Renderer + shader integration
+- [ ] Extend `NiitytRenderer` to upload ownership / AI-uniforms without breaking existing contracts.
+- [ ] Update `grid.frag.glsl` to branch on cell owner and apply distinct palettes/halos for player vs AI territory while preserving current cues (pointer, reach, fertilizer).
+- [ ] (Optional) Add a simple AI pressure or territory-ratio HUD cue in the gutters.
 
-## 4. Visual feedback tweaks
-- [x] Pointer glow reduction via `grid.frag.glsl::renderPointer` (~35% of prior intensity).  
-- [x] Reach visualization overhaul (4-tile radius from growth + bottom edge, bright in-reach ground vs dim out-of-reach, placements gated by reach).
+## 4. AI decision loop
+- [ ] Add AI tick bookkeeping inside `ProtoState` (decision timer, cadence).
+- [ ] Implement a basic heuristic AI that periodically picks a cell + toolbelt slot to place based on reach/frontier/pigment opportunities.
+- [ ] Expose difficulty knobs (decision frequency, aggression weights, resource advantages) via labeled constants.
 
-## 5. Fertilizer mechanics
- - [x] Track fertilizer inventory per toolbelt icon.  
- - [x] Implement drop action (~30 s boost) that accelerates nearby growth of the matching color.  
- - [x] Integrate boost effect into the state tick and render any indicator.
+## 5. Game modes & UX
+- [ ] Introduce a `mode` field (e.g., `sandbox` / `vsAI`) and plumb it from `main.js` when mounting Niityt.
+- [ ] Implement minimal start/end conditions and scoring for AI matches, including a readable definition of "win" and "loss".
+- [ ] Add in-canvas feedback for AI matches (e.g., subtle win/lose banner or overlay text) that stays within the single-canvas HUD philosophy.
+- [ ] Update the handbook snapshot to document AI modes, ownership, and UX affordances.
 
-## 6. Docs + verification
-- [ ] Update [static/niityt/docs/handbook.md](cci:7://file:///home/void/repo/tauon/static/niityt/docs/handbook.md:0:0-0:0) + dated snapshot to describe new mechanics/visuals/status.  
-- [ ] Run lint/tests/manual playtest; summarize results and remaining TODOs, then update this checklist.
+## 6. Parity, tests, and verification
+- [ ] (Stretch) Mirror ownership, AI resources, and AI tick logic into the WASM core and wire it behind a feature flag.
+- [ ] Run lint/tests/manual playtests for AI modes; summarize coverage, edge cases, and follow-ups in this file.
 
 # AI helper prompt
-> You are assisting with Niityt feature delivery. Pick exactly one unchecked task (or subtask) from the TODO above and complete it end-to-end. When you finish:
-> 1. Summarize what you accomplished and how it changes gameplay/UX.
-> 2. Call out which visual/interaction design patterns or palettes you used (e.g., glow attenuation style, HUD typography, shader motifs).
-> 3. Ask the user to manually test the feature for any edge cases or unexpected behavior.
+> You are assisting with Niityt AI-opponent work. Pick exactly one unchecked task (or subtask) from the TODO above and complete it end-to-end. When you finish:
+> 1. Summarize what you accomplished and how it changes gameplay/UX, especially how the AI behaves or is perceived.
+> 2. Call out which visual/interaction design patterns or palettes you used (e.g., rival territory colors, HUD banners, shader motifs).
+> 3. Ask the user to manually test the new AI behavior or mode for edge cases and unexpected interactions.
 > 4. Mark the task done in the TODO list.
-> 5. Ask the user whether they want to continue with the next task or tweak what you just delivered.
+> 5. Ask the user whether they want to continue with the next task or refine the behavior you just delivered.
 > 6. When recapping a session, summarize the main beats as alternating single-sentence lines prefixed with `USER:` and `AI:`, then check this TODO file and update the latest checkpoint to reflect what changed and what’s next.
 > Keep responses concise and focused on shippable increments.
 
@@ -135,3 +134,13 @@ AI: Implemented a 4-tile reach mask from growth and the bottom edge, brightened 
 **What’s next (working assumption)**
 - Implement fertilizer mechanics for the fertilizer tool (inventory per icon, timed local growth boost, and visual indicator).
 - Update the Niityt handbook + snapshot and run a final lint/tests/manual playtest pass, then summarize verification and remaining ideas.
+
+### Checkpoint – Dec 11 2025, ~00:24 UTC+02
+
+**USER/AI recap (single sentences)**
+USER: Asked to pivot the Niityt TODO file from pigment/toolbelt work to a new AI-opponent plan.
+AI: Reframed the goal, summary, and TODO sections around an AI rival that shares the grid, and updated the AI helper prompt to target the new tasks.
+
+**What’s next (working assumption)**
+- Decide the initial opponent flavor (duel vs survival) and lock down win/lose conditions.
+- Begin implementing the state-level ownership + AI resource changes before touching shaders or UX.
