@@ -140,12 +140,28 @@ export class InputController {
     if (event.defaultPrevented) return;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     const key = event.key;
-    if (key >= '1' && key <= '8') {
+    if (key === 'q' || key === 'Q') {
+      if (this.state && typeof this.state.setViewMode === 'function') {
+        this.state.setViewMode(0);
+      }
+    } else if (key === 'w' || key === 'W') {
+      if (this.state && typeof this.state.setViewMode === 'function') {
+        this.state.setViewMode(1);
+      }
+    } else if (key === 'e' || key === 'E') {
+      if (this.state && typeof this.state.setViewMode === 'function') {
+        this.state.setViewMode(2);
+      }
+    } else if (key === 'r' || key === 'R') {
+      if (this.state && typeof this.state.setViewMode === 'function') {
+        this.state.setViewMode(3);
+      }
+    } else if (key >= '1' && key <= '8') {
       const slotIndex = parseInt(key, 10) - 1;
       this.state.setActiveSlot(slotIndex);
-    } else if (key === 'q' || key === 'Q') {
+    } else if (key === 'a' || key === 'A') {
       this.state.shiftActiveSlot(-1);
-    } else if (key === 'e' || key === 'E') {
+    } else if (key === 'd' || key === 'D') {
       this.state.shiftActiveSlot(1);
     } else if (key === 'f' || key === 'F') {
       this.state.attemptDropFertilizerAtPointer();

@@ -1,29 +1,62 @@
-const CONTROL_COST = 12;
-const ENERGY_CAP = 120;
-const BASE_CHARGE_RATE = 6; // energy per second
-const SPREAD_SAMPLES = 500;
-const HUD_ICON_LIMIT = 4;
-const TOOLBELT_SLOT_COUNT = 8;
-const TOOLBELT_SLOTS_PER_SIDE = TOOLBELT_SLOT_COUNT / 2;
-const TOOLBELT_STACK_CAP = 12;
-const FERTILIZER_MAX = 80;
-const FERTILIZER_BOOST_DURATION = 30;
-const FERTILIZER_BOOST_RADIUS = 6;
-const PIGMENT_NONE = 0;
-const PIGMENT_FERTILIZER = 1;
-const PIGMENT_BASE = 0;
-const PIGMENT_VARIANTS = [2, 3, 4, 5, 6, 7];
-const RECENT_PICKUP_WINDOW = 1.5;
+import {
+  updateReachField as growthUpdateReachField,
+  updateGrowthField as growthUpdateGrowthField,
+  updateLocalGrowthSignal as growthUpdateLocalGrowthSignal,
+  updateGrowthAccumulator as growthUpdateGrowthAccumulator,
+  getMeadowStrength as growthGetMeadowStrength,
+} from './state-growth.js';
 
-const AI_DECISION_INTERVAL = 1.0;
+import {
+  initializeAiStartingLine as aiInitializeAiStartingLine,
+  updateAi as aiUpdateAi,
+  runAiTurn as aiRunAiTurn,
+  aiPlaceControlAt as aiAiPlaceControlAt,
+  getOwnershipStats as aiGetOwnershipStats,
+  updateMatchState as aiUpdateMatchState,
+} from './state-ai.js';
 
-const OWNER_NEUTRAL = 0;
-const OWNER_PLAYER = 1;
-const OWNER_AI = 2;
+import {
+  CONTROL_COST,
+  ENERGY_CAP,
+  BASE_CHARGE_RATE,
+  SPREAD_SAMPLES,
+  HUD_ICON_LIMIT,
+  TOOLBELT_SLOT_COUNT,
+  TOOLBELT_SLOTS_PER_SIDE,
+  TOOLBELT_STACK_CAP,
+  FERTILIZER_MAX,
+  FERTILIZER_BOOST_DURATION,
+  FERTILIZER_BOOST_RADIUS,
+  GROWTH_ACCUM_RATE,
+  GROWTH_ACCUM_DECAY,
+  GROWTH_ACCUM_THRESHOLD,
+  FLOWER_NONE,
+  FLOWER_FERTILIZER,
+  FLOWER_BASE,
+  FLOWER_VARIANTS,
+  RECENT_PICKUP_WINDOW,
+  AI_DECISION_INTERVAL,
+  OWNER_NEUTRAL,
+  OWNER_PLAYER,
+  OWNER_AI,
+  clamp,
+} from './state-constants.js';
 
-function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), max);
-}
+import {
+  getToolbeltDescriptors as tbGetToolbeltDescriptors,
+  encodeToolbeltSlice as tbEncodeToolbeltSlice,
+} from './state-toolbelt.js';
+
+import {
+  updateFertilizerBoost as flowersUpdateFertilizerBoost,
+  getFertilizerBoostFactor as flowersGetFertilizerBoostFactor,
+  dropFertilizer as flowersDropFertilizer,
+  getFertilizerBoostDescriptor as flowersGetFertilizerBoostDescriptor,
+  generateFlowerLayer as flowersGenerateFlowerLayer,
+  clearFlower as flowersClearFlower,
+  harvestFlower as flowersHarvestFlower,
+  collectFlower as flowersCollectFlower,
+} from './state-flowers.js';
 
 export class ProtoState {
   constructor(width = 128, height = 128, options = {}) {
@@ -32,7 +65,7 @@ export class ProtoState {
     const size = width * height;
     this.grid = new Uint8Array(size);
     this.cellColors = new Uint8Array(size);
-    this.pigments = new Uint8Array(size);
+    this.flowers = new Uint8Array(size);
     this.owner = new Uint8Array(size);
     this.controlBandHeight = Math.max(6, Math.floor(height * 0.08));
     this.energy = CONTROL_COST * 1.5;
@@ -43,31 +76,45 @@ export class ProtoState {
     this.toolbelt = Array.from({ length: TOOLBELT_SLOT_COUNT }, () => null);
     this.activeSlotIndex = 0;
     this.fertilizer = 0;
-    this.lastNonFertilizerColorId = PIGMENT_BASE;
+    this.lastNonFertilizerColorId = FLOWER_BASE;
     this.fertilizerBoost = null;
     this.recentPickupTimer = 0;
-    this.recentPickupColor = PIGMENT_NONE;
+    this.recentPickupColor = FLOWER_NONE;
 
     this.aiDecisionTimer = 0;
 
     this.reach = new Uint8Array(size);
     this.reachScratch = new Uint8Array(size);
 
+    this.growthField = new Uint8Array(size);
+    this.growthFieldScratch = new Uint8Array(size);
+
+    this.localGrowth = new Uint8Array(size);
+    this.growthAccumulator = new Float32Array(size);
+
+    this.growthAccumulatorVis = new Uint8Array(size);
+
+    this.viewMode = 0;
+
     this.mode = (options && options.mode === 'duel') ? 'duel' : 'sandbox';
     this.matchFinished = false;
     this.matchWinner = null;
 
     this.initializeDefaultToolbelt();
-    this.generatePigmentLayer();
+    flowersGenerateFlowerLayer(this);
     if (this.mode === 'duel') {
       this.initializeAiStartingLine();
     }
     this.updateReachField();
+    this.updateGrowthField();
   }
 
   tick(dt) {
     this.time += dt;
-    const bonus = 1 + this.claimedIndices.length * 0.004;
+    const bonusBase = 1 + this.claimedIndices.length * 0.004;
+    const meadowStrength = this.getMeadowStrength();
+    const meadowFactor = 1 + meadowStrength * 0.5;
+    const bonus = bonusBase * meadowFactor;
     const growthRatio = bonus;
     this.energy = Math.min(
       ENERGY_CAP,
@@ -87,6 +134,9 @@ export class ProtoState {
       this.updateAi(dt);
     }
     this.updateReachField();
+    this.updateGrowthField();
+    this.updateLocalGrowthSignal();
+    this.updateGrowthAccumulator(dt);
     this.updateMatchState();
   }
 
@@ -102,15 +152,6 @@ export class ProtoState {
     }
   }
 
-  updateFertilizerBoost(dt) {
-    if (!this.fertilizerBoost) return;
-    const boost = this.fertilizerBoost;
-    boost.remaining = Math.max(0, boost.remaining - dt);
-    if (boost.remaining <= 0) {
-      this.fertilizerBoost = null;
-    }
-  }
-
   spread(iterations) {
     if (!this.claimedIndices.length) return;
     for (let i = 0; i < iterations; i += 1) {
@@ -120,8 +161,8 @@ export class ProtoState {
       if (sourceValue === 0) continue;
       const sourceColorId = (sourceIdx >= 0 && sourceIdx < this.cellColors.length)
         ? this.cellColors[sourceIdx]
-        : PIGMENT_BASE;
-      const boost = this.getFertilizerBoostFactor(sourceIdx, sourceColorId);
+        : FLOWER_BASE;
+      const boost = flowersGetFertilizerBoostFactor(this, sourceIdx, sourceColorId);
       const spreadChanceBase = 0.35;
       const spreadChance = clamp(spreadChanceBase + boost * 0.6, 0, 1);
       const reinforceChanceBase = 0.3;
@@ -130,50 +171,19 @@ export class ProtoState {
       if (!neighbors.length) continue;
       const targetIdx = neighbors[Math.floor(Math.random() * neighbors.length)];
       const currentValue = this.grid[targetIdx];
-      if (currentValue === 0) {
-        if (Math.random() < spreadChance) {
-          const spreadValue = clamp(sourceValue - 24, 24, 255);
-          this.grid[targetIdx] = spreadValue;
-          const colorId = this.inheritColorFromSource(sourceIdx);
-          let ownerId = OWNER_PLAYER;
-          if (this.owner && this.owner.length === this.grid.length) {
-            const srcOwner = this.owner[sourceIdx];
-            if (srcOwner === OWNER_AI) {
-              ownerId = OWNER_AI;
-            }
-          }
-          this.onCellClaimed(targetIdx, colorId, ownerId);
-        }
-      } else if (Math.random() < reinforceChance) {
+      if (currentValue > 0 && Math.random() < reinforceChance) {
         const reinforced = clamp(currentValue + 4 + Math.floor(40 * boost), 0, 255);
         this.grid[targetIdx] = reinforced;
       }
     }
   }
 
+  updateFertilizerBoost(dt) {
+    flowersUpdateFertilizerBoost(this, dt);
+  }
+
   getFertilizerBoostFactor(index, colorId) {
-    if (!this.fertilizerBoost) return 0;
-    if (!Number.isFinite(index) || index < 0 || index >= this.grid.length) return 0;
-    const boost = this.fertilizerBoost;
-    const effectiveColorId = colorId === undefined || colorId === null ? PIGMENT_BASE : colorId;
-    const boostColorId = boost.colorId === undefined || boost.colorId === null ? PIGMENT_NONE : boost.colorId;
-    if (boostColorId !== PIGMENT_BASE && effectiveColorId !== boostColorId) {
-      return 0;
-    }
-    const center = boost.center;
-    if (!Number.isFinite(center) || center < 0 || center >= this.grid.length) return 0;
-    const sourceCoord = this.coordFromIndex(index);
-    const centerCoord = this.coordFromIndex(center);
-    const dx = sourceCoord.x - centerCoord.x;
-    const dy = sourceCoord.y - centerCoord.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const radius = Math.max(FERTILIZER_BOOST_RADIUS, 0);
-    if (radius <= 0) return 0;
-    const spatial = 1 - clamp(dist / radius, 0, 1);
-    if (spatial <= 0) return 0;
-    const duration = Math.max(boost.duration || FERTILIZER_BOOST_DURATION, 0.0001);
-    const temporal = clamp(boost.remaining / duration, 0, 1);
-    return spatial * temporal;
+    return flowersGetFertilizerBoostFactor(this, index, colorId);
   }
 
   neighborsOfIndex(index) {
@@ -224,40 +234,88 @@ export class ProtoState {
 
   attemptDropFertilizerAtPointer() {
     if (!this.pointerCell) return false;
-    return this.dropFertilizer(this.pointerCell.x, this.pointerCell.y);
+    return flowersDropFertilizer(this, this.pointerCell.x, this.pointerCell.y);
+  }
+
+  canPlaceControlAt(x, y) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+    if (this.mode === 'duel' && this.matchFinished) return false;
+    if (x < 0 || y < 0 || x >= this.width || y >= this.height) return false;
+    const idx = this.indexFromCoord(x, y);
+    const gridValue = this.grid[idx];
+    const colorId = this.consumeActiveFlower();
+    if (!this.isCellInReach(x, y)) return false;
+
+    if (gridValue === 0) {
+      if (colorId !== FLOWER_BASE) return false;
+      if (this.activeSlotIndex !== 0) return false;
+      if (this.energy < CONTROL_COST) return false;
+      return true;
+    }
+
+    let ownerId = OWNER_PLAYER;
+    if (this.owner && this.owner.length === this.grid.length) {
+      ownerId = this.owner[idx];
+    }
+    if (this.mode === 'duel' && ownerId !== OWNER_PLAYER) {
+      return false;
+    }
+    if (colorId === FLOWER_BASE) return false;
+    const currentColor = this.cellColors[idx];
+    if (colorId === currentColor) return false;
+    if (this.energy < CONTROL_COST) return false;
+    return true;
   }
 
   placeControl(x, y) {
     if (this.mode === 'duel' && this.matchFinished) return false;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+    if (x < 0 || y < 0 || x >= this.width || y >= this.height) return false;
     const idx = this.indexFromCoord(x, y);
-    if (this.grid[idx] !== 0) return false;
+    const gridValue = this.grid[idx];
+    const colorId = this.consumeActiveFlower();
+
     if (!this.isCellInReach(x, y)) return false;
+
+    if (gridValue === 0) {
+      if (colorId !== FLOWER_BASE) {
+        return false;
+      }
+      if (this.activeSlotIndex !== 0) {
+        return false;
+      }
+      if (this.energy < CONTROL_COST) return false;
+      this.energy -= CONTROL_COST;
+      this.grid[idx] = 255;
+      this.onCellClaimed(idx, FLOWER_BASE, OWNER_PLAYER);
+      return true;
+    }
+
+    let ownerId = OWNER_PLAYER;
+    if (this.owner && this.owner.length === this.grid.length) {
+      ownerId = this.owner[idx];
+    }
+    if (this.mode === 'duel' && ownerId !== OWNER_PLAYER) {
+      return false;
+    }
+    if (colorId === FLOWER_BASE) {
+      return false;
+    }
+    const currentColor = this.cellColors[idx];
+    if (colorId === currentColor) {
+      return false;
+    }
     if (this.energy < CONTROL_COST) return false;
     this.energy -= CONTROL_COST;
-    this.grid[idx] = 255;
-    const colorId = this.consumeActivePigment();
-    if (colorId !== PIGMENT_BASE && colorId !== PIGMENT_FERTILIZER) {
+    this.cellColors[idx] = colorId;
+    if (colorId !== FLOWER_BASE && colorId !== FLOWER_FERTILIZER) {
       this.lastNonFertilizerColorId = colorId;
     }
-    this.onCellClaimed(idx, colorId, OWNER_PLAYER);
     return true;
   }
 
   dropFertilizer(x, y) {
-    if (this.mode === 'duel' && this.matchFinished) return false;
-    if (this.fertilizer <= 0) return false;
-    if (x < 0 || y < 0 || x >= this.width || y >= this.height) return false;
-    const idx = this.indexFromCoord(x, y);
-    if (this.grid[idx] === 0) return false;
-    const colorId = this.lastNonFertilizerColorId || PIGMENT_BASE;
-    this.fertilizer = clamp(this.fertilizer - 1, 0, FERTILIZER_MAX);
-    this.fertilizerBoost = {
-      center: idx,
-      colorId,
-      remaining: FERTILIZER_BOOST_DURATION,
-      duration: FERTILIZER_BOOST_DURATION,
-    };
-    return true;
+    return flowersDropFertilizer(this, x, y);
   }
 
   indexFromCoord(x, y) {
@@ -276,6 +334,8 @@ export class ProtoState {
     const toolbelt = this.getToolbeltDescriptors();
     const recentPickupStrength = RECENT_PICKUP_WINDOW > 0 ? this.recentPickupTimer / RECENT_PICKUP_WINDOW : 0;
     const ownership = this.getOwnershipStats();
+    const pointer = this.pointerCell;
+    const pointerCanPlace = !!(pointer && this.canPlaceControlAt(pointer.x, pointer.y));
     return {
       grid: this.grid,
       cellColors: this.cellColors,
@@ -284,6 +344,7 @@ export class ProtoState {
       time,
       pointerCell: this.pointerCell,
       pointerActive: pointerActive && !!this.pointerCell,
+      pointerCanPlace,
       bandHeightNorm: this.controlBandHeight / this.height,
       energyNorm: this.energy / ENERGY_CAP,
       hudLeftIcons: hud.left,
@@ -296,6 +357,9 @@ export class ProtoState {
       fertilizerBoost: this.getFertilizerBoostDescriptor(),
       reachMask: this.reach,
       ownerMask: this.owner,
+      growthField: this.growthField,
+      growthAccum: this.growthAccumulatorVis,
+      localGrowth: this.localGrowth,
       ownership,
       match: {
         mode: this.mode,
@@ -306,6 +370,7 @@ export class ProtoState {
         colorId: this.recentPickupColor,
         strength: clamp(recentPickupStrength, 0, 1),
       },
+      viewMode: this.viewMode || 0,
     };
   }
 
@@ -313,7 +378,7 @@ export class ProtoState {
     if (!this.fertilizerBoost) {
       return {
         centerUv: null,
-        colorId: PIGMENT_NONE,
+        colorId: FLOWER_NONE,
         strength: 0,
         radiusNorm: 0,
       };
@@ -323,7 +388,7 @@ export class ProtoState {
     if (!Number.isFinite(boost.center) || boost.center < 0 || boost.center >= total) {
       return {
         centerUv: null,
-        colorId: PIGMENT_NONE,
+        colorId: FLOWER_NONE,
         strength: 0,
         radiusNorm: 0,
       };
@@ -336,12 +401,12 @@ export class ProtoState {
     const radiusNorm = this.width > 0 ? FERTILIZER_BOOST_RADIUS / this.width : 0;
     return {
       centerUv: { u, v },
-      colorId: boost.colorId || PIGMENT_NONE,
+      colorId: boost.colorId || FLOWER_NONE,
       strength,
       radiusNorm,
     };
   }
-
+ 
   buildHudDescriptors() {
     const energyFill = this.energy / ENERGY_CAP;
     const spreadFill = this.claimedIndices.length / this.grid.length;
@@ -366,53 +431,75 @@ export class ProtoState {
 
   initializeDefaultToolbelt() {
     if (!Array.isArray(this.toolbelt) || this.toolbelt.length === 0) return;
-    this.toolbelt[0] = { colorId: PIGMENT_BASE, locked: true };
+    this.toolbelt[0] = { colorId: FLOWER_BASE, locked: true };
     if (this.toolbelt.length > 1) {
-      this.toolbelt[1] = { colorId: PIGMENT_FERTILIZER, locked: true };
+      this.toolbelt[1] = { colorId: FLOWER_FERTILIZER, locked: true };
     }
     this.activeSlotIndex = 0;
   }
 
   updateReachField() {
-    const size = this.width * this.height;
-    if (!this.reach || this.reach.length !== size) {
-      this.reach = new Uint8Array(size);
-    }
-    if (!this.reachScratch || this.reachScratch.length !== size) {
-      this.reachScratch = new Uint8Array(size);
-    }
+    growthUpdateReachField(this);
+  }
 
-    const width = this.width;
-    const height = this.height;
-    const bottomY = height - 1;
+  updateGrowthField() {
+    growthUpdateGrowthField(this);
+  }
 
-    for (let idx = 0; idx < size; idx += 1) {
-      const y = Math.floor(idx / width);
-      const isSource = y === bottomY || this.grid[idx] > 0;
-      const value = isSource ? 255 : 0;
-      this.reach[idx] = value;
-      this.reachScratch[idx] = value;
-    }
+  updateLocalGrowthSignal() {
+    growthUpdateLocalGrowthSignal(this);
+  }
 
-    const radius = 4;
-    for (let step = 0; step < radius; step += 1) {
-      for (let idx = 0; idx < size; idx += 1) {
-        if (this.reach[idx]) {
-          continue;
-        }
-        const x = idx % width;
-        const y = Math.floor(idx / width);
-        let neighbor = false;
-        if (x > 0 && this.reachScratch[idx - 1]) neighbor = true;
-        if (!neighbor && x < width - 1 && this.reachScratch[idx + 1]) neighbor = true;
-        if (!neighbor && y > 0 && this.reachScratch[idx - width]) neighbor = true;
-        if (!neighbor && y < height - 1 && this.reachScratch[idx + width]) neighbor = true;
-        if (neighbor) {
-          this.reach[idx] = 255;
-        }
+  updateGrowthAccumulator(dt) {
+    growthUpdateGrowthAccumulator(this, dt);
+  }
+
+  tryFrontierClaim(index) {
+    if (!Number.isFinite(index)) return false;
+    const size = this.grid.length;
+    if (index < 0 || index >= size) return false;
+    if (this.grid[index] !== 0) return false;
+
+    const neighbors = this.neighborsOfIndex(index);
+    if (!neighbors.length) return false;
+
+    let bestIdx = -1;
+    let bestValue = 0;
+    for (let i = 0; i < neighbors.length; i += 1) {
+      const nIdx = neighbors[i];
+      const value = this.grid[nIdx];
+      if (value > bestValue) {
+        bestValue = value;
+        bestIdx = nIdx;
       }
-      this.reachScratch.set(this.reach);
     }
+
+    if (bestIdx < 0 || bestValue <= 0) return false;
+
+    const sourceIdx = bestIdx;
+    const sourceValue = this.grid[sourceIdx];
+    const spreadValue = clamp(sourceValue - 24, 24, 255);
+    this.grid[index] = spreadValue;
+    const colorId = this.inheritColorFromSource(sourceIdx);
+    let ownerId = OWNER_PLAYER;
+    if (this.owner && this.owner.length === this.grid.length) {
+      const srcOwner = this.owner[sourceIdx];
+      if (srcOwner === OWNER_AI) {
+        ownerId = OWNER_AI;
+      }
+    }
+    this.onCellClaimed(index, colorId, ownerId);
+    return true;
+  }
+
+  getMeadowStrength() {
+    return growthGetMeadowStrength(this);
+  }
+
+  setViewMode(mode) {
+    if (!Number.isFinite(mode)) return;
+    const m = Math.max(0, Math.min(3, Math.floor(mode)));
+    this.viewMode = m;
   }
 
   isCellInReach(x, y) {
@@ -422,13 +509,13 @@ export class ProtoState {
     return this.reach[idx] > 0;
   }
 
-  generatePigmentLayer() {
-    const total = this.pigments.length;
+  generateFlowerLayer() {
+    const total = this.flowers.length;
     const indices = new Array(total);
     const noiseValues = new Float32Array(total);
 
-    this.pigments.fill(PIGMENT_NONE);
-    this.cellColors.fill(PIGMENT_NONE);
+    this.flowers.fill(FLOWER_NONE);
+    this.cellColors.fill(FLOWER_NONE);
 
     for (let i = 0; i < total; i += 1) {
       indices[i] = i;
@@ -442,27 +529,20 @@ export class ProtoState {
 
     for (let placed = 0; placed < REQUIRED_FERTILIZER && cursor < indices.length; placed += 1, cursor += 1) {
       const idx = indices[cursor];
-      this.pigments[idx] = PIGMENT_FERTILIZER;
-      this.cellColors[idx] = PIGMENT_FERTILIZER;
+      this.flowers[idx] = FLOWER_FERTILIZER;
+      this.cellColors[idx] = FLOWER_FERTILIZER;
     }
 
-    for (let v = 0; v < PIGMENT_VARIANTS.length && cursor < indices.length; v += 1, cursor += 1) {
+    for (let v = 0; v < FLOWER_VARIANTS.length && cursor < indices.length; v += 1, cursor += 1) {
       const idx = indices[cursor];
-      const variant = PIGMENT_VARIANTS[v];
-      this.pigments[idx] = variant;
+      const variant = FLOWER_VARIANTS[v];
+      this.flowers[idx] = variant;
       this.cellColors[idx] = variant;
     }
   }
 
   initializeAiStartingLine() {
-    if (this.mode !== 'duel') return;
-    const y = 0;
-    for (let x = 0; x < this.width; x += 1) {
-      const idx = this.indexFromCoord(x, y);
-      if (idx < 0 || idx >= this.grid.length) continue;
-      this.grid[idx] = 220;
-      this.onCellClaimed(idx, PIGMENT_BASE, OWNER_AI);
-    }
+    aiInitializeAiStartingLine(this);
   }
 
   coordNoise(index) {
@@ -472,14 +552,14 @@ export class ProtoState {
     return s - Math.floor(s);
   }
 
-  onCellClaimed(idx, colorId = PIGMENT_BASE, ownerId = OWNER_PLAYER) {
+  onCellClaimed(idx, colorId = FLOWER_BASE, ownerId = OWNER_PLAYER) {
     this.claimedIndices.push(idx);
     if (ownerId === OWNER_PLAYER) {
-      this.harvestPigment(idx);
+      this.harvestFlower(idx);
     } else {
-      this.clearPigment(idx);
+      this.clearFlower(idx);
     }
-    const appliedColor = colorId === undefined ? PIGMENT_BASE : colorId;
+    const appliedColor = colorId === undefined ? FLOWER_BASE : colorId;
     this.cellColors[idx] = appliedColor;
     if (this.owner && this.owner.length === this.grid.length) {
       const value = ownerId || OWNER_PLAYER;
@@ -487,39 +567,39 @@ export class ProtoState {
     }
   }
 
-  clearPigment(idx) {
+  clearFlower(idx) {
     if (!Number.isFinite(idx)) return;
-    if (idx < 0 || idx >= this.pigments.length) return;
-    this.pigments[idx] = PIGMENT_NONE;
+    if (idx < 0 || idx >= this.flowers.length) return;
+    this.flowers[idx] = FLOWER_NONE;
   }
 
-  harvestPigment(idx) {
-    const pigmentId = this.pigments[idx];
-    if (pigmentId === PIGMENT_NONE) {
-      return PIGMENT_NONE;
+  harvestFlower(idx) {
+    const flowerId = this.flowers[idx];
+    if (flowerId === FLOWER_NONE) {
+      return FLOWER_NONE;
     }
-    if (pigmentId === PIGMENT_FERTILIZER) {
+    if (flowerId === FLOWER_FERTILIZER) {
       this.fertilizer = clamp(this.fertilizer + 1, 0, FERTILIZER_MAX);
     } else {
-      this.collectPigment(pigmentId);
+      this.collectFlower(flowerId);
     }
-    this.recentPickupColor = pigmentId;
+    this.recentPickupColor = flowerId;
     this.recentPickupTimer = RECENT_PICKUP_WINDOW;
-    this.pigments[idx] = PIGMENT_NONE;
-    return pigmentId;
+    this.flowers[idx] = FLOWER_NONE;
+    return flowerId;
   }
 
-  collectPigment(pigmentId) {
+  collectFlower(flowerId) {
     for (let i = 0; i < this.toolbelt.length; i += 1) {
       const slot = this.toolbelt[i];
-      if (slot && slot.colorId === pigmentId) {
+      if (slot && slot.colorId === flowerId) {
         return;
       }
     }
     for (let i = 0; i < this.toolbelt.length; i += 1) {
       const slot = this.toolbelt[i];
       if (!slot) {
-        this.toolbelt[i] = { colorId: pigmentId };
+        this.toolbelt[i] = { colorId: flowerId };
         return;
       }
     }
@@ -528,19 +608,19 @@ export class ProtoState {
       const index = (startIndex + offset) % this.toolbelt.length;
       const slot = this.toolbelt[index];
       if (!slot || !slot.locked) {
-        this.toolbelt[index] = { colorId: pigmentId };
+        this.toolbelt[index] = { colorId: flowerId };
         return;
       }
     }
   }
 
-  consumeActivePigment() {
+  consumeActiveFlower() {
     const slot = this.toolbelt[this.activeSlotIndex];
     if (!slot) {
-      return PIGMENT_BASE;
+      return FLOWER_BASE;
     }
-    if (slot.locked && slot.colorId === PIGMENT_FERTILIZER) {
-      return PIGMENT_BASE;
+    if (slot.locked && slot.colorId === FLOWER_FERTILIZER) {
+      return FLOWER_BASE;
     }
     return slot.colorId;
   }
@@ -557,185 +637,45 @@ export class ProtoState {
   }
 
   inheritColorFromSource(sourceIdx) {
-    if (sourceIdx === null || sourceIdx === undefined) return PIGMENT_BASE;
-    if (sourceIdx < 0 || sourceIdx >= this.cellColors.length) return PIGMENT_BASE;
+    if (sourceIdx === null || sourceIdx === undefined) return FLOWER_BASE;
+    if (sourceIdx < 0 || sourceIdx >= this.cellColors.length) return FLOWER_BASE;
     const inherited = this.cellColors[sourceIdx];
-    return inherited === undefined ? PIGMENT_BASE : inherited;
+    return inherited === undefined ? FLOWER_BASE : inherited;
   }
 
   updatePickupTimer(dt) {
     if (this.recentPickupTimer <= 0) return;
     this.recentPickupTimer = Math.max(0, this.recentPickupTimer - dt);
     if (this.recentPickupTimer === 0) {
-      this.recentPickupColor = PIGMENT_NONE;
+      this.recentPickupColor = FLOWER_NONE;
     }
   }
 
   updateAi(dt) {
-    if (this.mode !== 'duel' || this.matchFinished) {
-      return;
-    }
-    if (!Number.isFinite(dt) || dt <= 0) return;
-
-    this.aiDecisionTimer += dt;
-    if (this.aiDecisionTimer < AI_DECISION_INTERVAL) {
-      return;
-    }
-    this.aiDecisionTimer -= AI_DECISION_INTERVAL;
-    this.runAiTurn();
+    aiUpdateAi(this, dt);
   }
 
   runAiTurn() {
-    if (this.aiEnergy < CONTROL_COST) return;
-    const total = this.width * this.height;
-    if (total <= 0) return;
-
-    const maxAttempts = 64;
-    let bestIdx = -1;
-    let bestScore = -Infinity;
-
-    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      const idx = Math.floor(Math.random() * total);
-      if (this.grid[idx] !== 0) continue;
-      const coord = this.coordFromIndex(idx);
-      const x = coord.x;
-      const y = coord.y;
-
-      let score = 0;
-      const half = this.height * 0.5;
-      const third = this.height / 3;
-      if (y < third) {
-        score += 2;
-      } else if (y < half) {
-        score += 1;
-      }
-
-      const neighbors = this.neighborsOfIndex(idx);
-      for (let i = 0; i < neighbors.length; i += 1) {
-        const nIdx = neighbors[i];
-        const ownerId = this.owner && this.owner.length === total
-          ? this.owner[nIdx]
-          : OWNER_NEUTRAL;
-        if (ownerId === OWNER_PLAYER) {
-          score += 1;
-        } else if (ownerId === OWNER_AI) {
-          score += 0.5;
-        }
-      }
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestIdx = idx;
-      }
-    }
-
-    if (bestIdx >= 0) {
-      const { x, y } = this.coordFromIndex(bestIdx);
-      this.aiPlaceControlAt(x, y);
-    }
+    aiRunAiTurn(this);
   }
 
   aiPlaceControlAt(x, y) {
-    if (this.mode !== 'duel' || this.matchFinished) return false;
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
-    if (x < 0 || y < 0 || x >= this.width || y >= this.height) return false;
-    const idx = this.indexFromCoord(x, y);
-    if (this.grid[idx] !== 0) return false;
-    if (!this.isCellInReach(x, y)) return false;
-    if (this.aiEnergy < CONTROL_COST) return false;
-
-    this.aiEnergy -= CONTROL_COST;
-    this.grid[idx] = 255;
-    const colorId = PIGMENT_BASE;
-    this.onCellClaimed(idx, colorId, OWNER_AI);
-    return true;
+    return aiAiPlaceControlAt(this, x, y);
   }
 
   getOwnershipStats() {
-    const total = this.width * this.height;
-    if (!this.owner || this.owner.length !== total) {
-      const playerCells = this.claimedIndices.length;
-      const neutralCells = total - playerCells;
-      return {
-        playerCells,
-        aiCells: 0,
-        neutralCells,
-        total,
-      };
-    }
-
-    let playerCells = 0;
-    let aiCells = 0;
-    let neutralCells = 0;
-    for (let i = 0; i < total; i += 1) {
-      const ownerId = this.owner[i];
-      if (ownerId === OWNER_PLAYER) {
-        playerCells += 1;
-      } else if (ownerId === OWNER_AI) {
-        aiCells += 1;
-      } else {
-        neutralCells += 1;
-      }
-    }
-
-    return {
-      playerCells,
-      aiCells,
-      neutralCells,
-      total,
-    };
+    return aiGetOwnershipStats(this);
   }
 
   updateMatchState() {
-    if (this.mode !== 'duel' || this.matchFinished) {
-      return;
-    }
-
-    const stats = this.getOwnershipStats();
-    if (stats.neutralCells > 0) {
-      return;
-    }
-
-    if (stats.playerCells > stats.aiCells) {
-      this.matchWinner = 'player';
-    } else if (stats.aiCells > stats.playerCells) {
-      this.matchWinner = 'ai';
-    } else {
-      this.matchWinner = 'draw';
-    }
-    this.matchFinished = true;
+    aiUpdateMatchState(this);
   }
 
   getToolbeltDescriptors() {
-    return {
-      left: this.encodeToolbeltSlice(0, TOOLBELT_SLOTS_PER_SIDE),
-      right: this.encodeToolbeltSlice(TOOLBELT_SLOTS_PER_SIDE, TOOLBELT_SLOT_COUNT),
-    };
+    return tbGetToolbeltDescriptors(this);
   }
 
   encodeToolbeltSlice(start, end) {
-    const length = end - start;
-    const fill = new Float32Array(length);
-    const colors = new Float32Array(length);
-    const active = new Float32Array(length);
-    const stacks = new Float32Array(length);
-    for (let i = 0; i < length; i += 1) {
-      const slot = this.toolbelt[start + i];
-      if (slot) {
-        fill[i] = 1;
-        colors[i] = slot.colorId;
-        stacks[i] = 0;
-      }
-    }
-    const activeIndex = this.activeSlotIndex - start;
-    if (activeIndex >= 0 && activeIndex < length) {
-      active[activeIndex] = 1;
-    }
-    return {
-      fill,
-      colors,
-      active,
-      stacks,
-    };
+    return tbEncodeToolbeltSlice(this, start, end);
   }
 }

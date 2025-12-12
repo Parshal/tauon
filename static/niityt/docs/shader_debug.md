@@ -28,7 +28,7 @@ Only output is `outColor`, so use it as a debugging oscilloscope.
 | --- | --- |
 | `outColor = vec4(vec3(uv, 0.0), 1.0);` | Are our UVs/square mapping sane? If everything is black, UVs are NaN or outside [0,1]. |
 | `outColor = vec4(vec3(texture(u_grid, texUV).r), 1.0);` | Confirms the base energy texture has data. |
-| `outColor = vec4(vec3(texture(u_cellColors, texUV).r), 1.0);` | Verifies pigment texture writes. |
+| `outColor = vec4(vec3(texture(u_cellColors, texUV).r), 1.0);` | Verifies flower/ID texture writes. |
 | `outColor = vec4(vec3(float(condition)), 1.0);` | Shows whether specific branches/conditions fire (white = true). |
 | `discard;` vs. `outColor = vec4(1,0,0,1);` | Isolate problematic sections by early return. |
 
@@ -42,8 +42,8 @@ Scale/clamp intermediate values into [0,1] before writing them out; otherwise yo
 ## 4. Cross-Layer Checks (Rust/WASM ⇄ JS)
 1. **State parity**: mirror proto-state changes (buffers, enums) between Rust and JS modules. Desync causes garbage uniforms/texture sizes.
 2. **Memory layout**: when exporting textures from WASM, confirm they’re backed by `Uint8Array` views with stable lengths. A stray `realloc` can zero textures.
-3. **Timing**: ensure RAF only renders after state tick populates new buffers. A null `cellColors` texture yields black pigments.
-4. **Seeded RNG**: deterministic pigment layers make repro easier; log the seed so Rust and JS stay aligned.
+3. **Timing**: ensure RAF only renders after state tick populates new buffers. A null `cellColors` texture yields black flowers.
+4. **Seeded RNG**: deterministic flower layers make repro easier; log the seed so Rust and JS stay aligned.
 
 ## 5. Tooling & Extensions
 - `WEBGL_debug_shaders`: fetch GPU-translated shader source (helps when drivers change our code).
